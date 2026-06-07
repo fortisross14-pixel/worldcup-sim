@@ -1,0 +1,207 @@
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0805;--bg2:#121008;--bg3:#1a1510;--bg4:#252015;--bg5:#332a1a;
+  --gold:#c9a84c;--gold2:#e8c060;--gold3:#a07830;
+  --txt:#e8d8b0;--txt2:#a09060;--txt3:#605540;
+  --green:#4a9a5a;--red:#c04040;--blue:#4080c0;
+  --gen:#ff6b35;--leg:#f0c040;--epic:#9c27b0;--rare:#2196f3;--unc:#4caf50;--com:#6a7a9a;
+  --R:10px;--r:6px;
+  --font-head:'Bebas Neue',sans-serif;--font-body:'DM Sans',sans-serif;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:var(--font-body);background:var(--bg);color:var(--txt);font-size:14px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* ── HEADER ──────────────────────────────────── */
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:linear-gradient(135deg,var(--bg2),var(--bg3));border-bottom:1px solid var(--bg5);flex-shrink:0}
+.header-left{display:flex;align-items:center;gap:10px}
+.logo{font-family:var(--font-head);font-size:26px;color:var(--gold2);line-height:1;letter-spacing:.04em}
+.logo span{font-size:10px;letter-spacing:.2em;color:var(--txt3);display:block}
+.wc-badge{font-family:var(--font-head);font-size:14px;color:var(--gold);background:var(--bg4);padding:3px 10px;border-radius:20px;border:1px solid var(--bg5)}
+.header-right{display:flex;align-items:center;gap:8px}
+.saved-stamp{font-size:10px;color:var(--txt3)}
+
+/* ── NAV ─────────────────────────────────────── */
+.nav{display:flex;overflow-x:auto;background:var(--bg2);border-bottom:1px solid var(--bg4);flex-shrink:0;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav-tab{font-family:var(--font-head);font-size:12px;letter-spacing:.08em;color:var(--txt3);padding:10px 13px;border:none;background:none;cursor:pointer;white-space:nowrap;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.nav-tab.active{color:var(--gold2);border-bottom-color:var(--gold)}
+.nav-tab:hover:not(.active){color:var(--txt2)}
+
+/* ── PANELS ──────────────────────────────────── */
+.panels{flex:1;overflow:hidden;position:relative}
+.panel{display:none;position:absolute;inset:0;overflow-y:auto;padding:12px}
+.panel.active{display:block}
+.panel::-webkit-scrollbar{width:3px}
+.panel::-webkit-scrollbar-thumb{background:var(--bg5)}
+
+/* ── BUTTONS ─────────────────────────────────── */
+.btn{font-family:var(--font-head);font-size:13px;letter-spacing:.06em;border-radius:var(--r);border:1px solid var(--bg5);background:var(--bg3);color:var(--txt2);padding:7px 14px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--bg4);color:var(--txt);border-color:var(--gold3)}
+.btn-primary{background:var(--gold3);border-color:var(--gold);color:var(--bg)}
+.btn-primary:hover{background:var(--gold);color:var(--bg)}
+.btn-secondary{background:var(--bg3);color:var(--txt2)}
+.btn-danger{background:#3a0a0a;border-color:var(--red);color:#e07070}
+.btn-danger:hover{background:var(--red);color:white}
+.btn-icon{padding:7px 10px}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.35;cursor:default}
+
+/* ── COMMON ──────────────────────────────────── */
+.card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:12px;margin-bottom:8px}
+.card-click{cursor:pointer;transition:border-color .15s}
+.card-click:hover{border-color:var(--gold3)}
+.sec{font-family:var(--font-head);font-size:11px;letter-spacing:.15em;color:var(--txt3);margin:14px 0 7px;text-transform:uppercase}
+.row{display:flex;align-items:center;gap:8px}
+.spacer{flex:1}
+.empty{color:var(--txt3);font-style:italic;padding:24px;text-align:center}
+.badge{font-family:var(--font-head);font-size:10px;letter-spacing:.06em;padding:2px 7px;border-radius:20px}
+.badge-generational{background:#2a1000;color:var(--gen)}
+.badge-legendary{background:#261a00;color:var(--leg)}
+.badge-epic{background:#1a0d26;color:var(--epic)}
+.badge-rare{background:#0d1526;color:var(--rare)}
+.badge-uncommon{background:#0d1f0d;color:var(--unc)}
+.badge-common{background:#1a1e2a;color:var(--com)}
+.tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--bg3);border:1px solid var(--bg4);color:var(--txt2);font-family:var(--font-head);font-weight:600}
+
+/* ── GROUPS ──────────────────────────────────── */
+.groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.group-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:10px}
+.group-title{font-family:var(--font-head);font-size:15px;color:var(--gold2);margin-bottom:7px;letter-spacing:.08em}
+.group-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;cursor:pointer}
+.group-row:last-child{border:none}
+.group-row.qualifies{color:var(--gold2);font-weight:600}
+.group-row:hover .group-name{text-decoration:underline}
+.group-pts{font-family:var(--font-head);font-weight:700;color:var(--gold);margin-left:auto}
+.group-rec{font-size:10px;color:var(--txt3)}
+
+/* ── BRACKET ─────────────────────────────────── */
+.bracket-scroll{overflow-x:auto;padding-bottom:8px}
+.bracket-rounds{display:flex;gap:12px;padding:4px 0;min-width:max-content}
+.bracket-col{display:flex;flex-direction:column;gap:6px;min-width:160px}
+.bracket-round-name{font-family:var(--font-head);font-size:10px;letter-spacing:.12em;color:var(--txt3);text-align:center;margin-bottom:3px}
+.bracket-match{background:var(--bg3);border:1px solid var(--bg4);border-radius:var(--r);overflow:hidden}
+.bracket-team{display:flex;align-items:center;gap:5px;padding:6px 8px;font-size:11px;border-bottom:1px solid var(--bg4)}
+.bracket-team:last-child{border:none}
+.bracket-team.winner{background:rgba(201,168,76,0.10);color:var(--gold2);font-weight:600}
+.bracket-team.loser{opacity:.38}
+.bracket-team.tbd{color:var(--txt3);font-style:italic}
+.bracket-score{margin-left:auto;font-family:var(--font-head);font-size:13px;font-weight:700}
+
+/* ── MATCH RESULT ────────────────────────────── */
+.match-result-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:12px;margin-bottom:8px}
+.match-teams{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.match-team{flex:1;font-size:12px;font-weight:600;cursor:pointer}
+.match-team:hover{text-decoration:underline;color:var(--gold2)}
+.match-team.right{text-align:right}
+.match-score{font-family:var(--font-head);font-size:26px;color:var(--gold2);min-width:60px;text-align:center}
+.match-stats-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:4px;font-size:11px;color:var(--txt2);margin-top:6px;padding-top:6px;border-top:1px solid var(--bg4)}
+.match-stats-grid>*:nth-child(2){color:var(--txt3);text-align:center}
+.match-effect{font-size:11px;color:var(--gold3);padding:2px 0}
+.match-effect.star{color:var(--leg)}
+.star-ratings-row{display:flex;justify-content:space-between;margin-top:8px;padding-top:6px;border-top:1px solid var(--bg4)}
+.star-ratings-side{display:flex;flex-direction:column;gap:3px}
+.sr-item{display:flex;align-items:center;gap:5px;font-size:11px}
+.sr-pos{font-family:var(--font-head);font-size:10px;color:var(--txt3);width:28px}
+.sr-val{font-family:var(--font-head);font-size:13px;font-weight:700}
+.rating-gold{color:#f0c040}.rating-green{color:#4caf50}.rating-white{color:var(--txt)}.rating-red{color:#e53935}
+
+/* ── MATCH POPUP ─────────────────────────────── */
+.match-popup{position:fixed;bottom:0;left:0;right:0;z-index:50;pointer-events:none;padding:16px}
+.match-popup>*{pointer-events:all}
+
+/* ── STARS TAB ───────────────────────────────── */
+.star-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.star-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:11px;border-left:3px solid var(--com);cursor:pointer;transition:border-color .15s}
+.star-card:hover{border-color:var(--gold3) !important}
+.star-card.generational{border-left-color:var(--gen)}
+.star-card.legendary{border-left-color:var(--leg)}
+.star-card.epic{border-left-color:var(--epic)}
+.star-card.rare{border-left-color:var(--rare)}
+.star-card.uncommon{border-left-color:var(--unc)}
+.star-name{font-weight:600;font-size:14px;color:var(--txt);margin-bottom:2px}
+.star-pos{font-family:var(--font-head);font-size:11px;color:var(--gold3);letter-spacing:.08em}
+.star-team{font-size:11px;color:var(--txt2);margin-top:3px}
+.star-stats{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.star-stat{font-size:11px;color:var(--txt3)}
+.star-stat span{color:var(--txt2);font-weight:600}
+
+/* ── STAT BARS ───────────────────────────────── */
+.stat-row{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.stat-lbl{font-family:var(--font-head);font-size:10px;letter-spacing:.04em;color:var(--txt3);width:80px;flex-shrink:0}
+.stat-bar-wrap{flex:1;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden}
+.stat-bar{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--gold3),var(--gold2))}
+.stat-val{font-size:11px;color:var(--gold);font-family:var(--font-head);width:24px;text-align:right}
+.stat-bonus{font-size:10px;color:var(--green);min-width:28px}
+
+/* ── TABLE ───────────────────────────────────── */
+.table-wrap{overflow-x:auto}
+table.data-table{width:100%;border-collapse:collapse;font-size:12px}
+table.data-table th{font-family:var(--font-head);font-size:10px;letter-spacing:.1em;color:var(--txt3);padding:5px 7px;border-bottom:1px solid var(--bg4);text-align:left;font-weight:700}
+table.data-table td{padding:5px 7px;border-bottom:1px solid rgba(255,255,255,0.03)}
+table.data-table tr:hover td{background:var(--bg3)}
+table.data-table .num{text-align:center}
+table.data-table .c-name{cursor:pointer}
+table.data-table .c-name:hover{color:var(--gold2);text-decoration:underline}
+
+/* ── HISTORY ─────────────────────────────────── */
+.history-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:12px;margin-bottom:8px}
+.history-wc{font-family:var(--font-head);font-size:11px;letter-spacing:.1em;color:var(--txt3)}
+.history-champ{font-family:var(--font-head);font-size:20px;color:var(--gold2)}
+
+/* ── CHAMPION BANNER ─────────────────────────── */
+.champion-banner{text-align:center;padding:28px 16px;background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--gold);border-radius:var(--R);margin-bottom:12px}
+.champ-title{font-family:var(--font-head);font-size:18px;letter-spacing:.2em;color:var(--gold3);margin-top:8px}
+.champ-name{font-family:var(--font-head);font-size:28px;color:var(--gold2)}
+
+/* ── AWARDS ──────────────────────────────────── */
+.awards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.award-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:10px;text-align:center}
+.award-icon{font-size:22px;margin-bottom:4px}
+.award-label{font-family:var(--font-head);font-size:10px;letter-spacing:.1em;color:var(--txt3)}
+.award-name{font-weight:600;font-size:12px;margin-top:3px}
+.award-sub{font-size:11px;color:var(--txt2);margin-top:2px}
+
+/* ── OVERLAYS ────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:100;display:flex;align-items:center;justify-content:center;padding:14px}
+.modal-panel{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);width:100%;max-width:440px;max-height:86vh;overflow-y:auto;padding:16px}
+.modal-panel::-webkit-scrollbar{width:3px}
+.modal-panel::-webkit-scrollbar-thumb{background:var(--bg5)}
+.settings-panel{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);width:220px;padding:4px 0}
+.settings-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;font-family:var(--font-head);font-size:11px;letter-spacing:.1em;color:var(--txt3);border-bottom:1px solid var(--bg4)}
+.settings-item{display:block;width:100%;text-align:left;padding:9px 14px;font-size:13px;color:var(--txt2);background:none;border:none;cursor:pointer;font-family:var(--font-body);transition:background .1s,color .1s}
+.settings-item:hover{background:var(--bg3);color:var(--txt)}
+.settings-item.danger{color:#e07070}
+.settings-item.danger:hover{background:#2a0808}
+.settings-divider{height:1px;background:var(--bg4);margin:4px 0}
+.confirm-panel{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);padding:24px 20px;text-align:center;max-width:320px;width:100%}
+.confirm-icon{font-size:30px;margin-bottom:10px}
+.confirm-title{font-family:var(--font-head);font-size:18px;font-weight:700;color:var(--txt);margin-bottom:6px}
+.confirm-msg{font-size:13px;color:var(--txt2);margin-bottom:20px;line-height:1.5}
+.confirm-btns{display:flex;gap:10px;justify-content:center}
+
+/* ── PROGRESS BAR ────────────────────────────── */
+.prog-wrap{height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-bottom:10px}
+.prog-bar{height:100%;background:var(--gold);border-radius:2px;transition:width .3s}
+
+/* ── SORT / FILTER ───────────────────────────── */
+.filter-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.filter-btn{padding:3px 10px;font-size:11px;font-family:var(--font-head);border:1px solid var(--bg4);border-radius:20px;background:var(--bg3);color:var(--txt3);cursor:pointer}
+.filter-btn.active{background:var(--gold3);border-color:var(--gold);color:var(--bg)}
+
+/* ── INTER-WC CARD ───────────────────────────── */
+.interwc-card{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:var(--r);margin-bottom:6px;border-left:3px solid var(--bg5)}
+.interwc-card.retire{border-left-color:var(--red);opacity:.9}
+.interwc-card.debut{border-left-color:var(--green)}
+
+/* ── MORALE BADGE ────────────────────────────── */
+.morale-up{color:var(--green);font-size:11px}
+.morale-dn{color:var(--red);font-size:11px}
+
+@media(max-width:480px){
+  .groups-grid{grid-template-columns:1fr 1fr}
+  .star-grid{grid-template-columns:1fr 1fr}
+  .awards-grid{grid-template-columns:1fr 1fr}
+  .champ-name{font-size:22px}
+  .header-left .wc-badge{display:none}
+}

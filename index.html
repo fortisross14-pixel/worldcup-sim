@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>World Cup Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">⚽<span>WORLD CUP</span></div>
+      <div class="wc-badge">WC #<span id="wc-number">1</span></div>
+    </div>
+    <div class="header-right">
+      <span id="last-saved" class="saved-stamp"></span>
+      <button class="btn btn-primary" id="btn-main" onclick="handleMain()">▶ Begin WC</button>
+      <button class="btn btn-icon" onclick="openSettings()">⚙</button>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <button class="nav-tab active" data-tab="play"    onclick="switchTab('play')">🏠 Home</button>
+    <button class="nav-tab"        data-tab="groups"  onclick="switchTab('groups')">👥 Groups</button>
+    <button class="nav-tab"        data-tab="bracket" onclick="switchTab('bracket')">🏆 Bracket</button>
+    <button class="nav-tab"        data-tab="stars"   onclick="switchTab('stars')">⭐ Stars</button>
+    <button class="nav-tab"        data-tab="nations" onclick="switchTab('nations')">📊 Nations</button>
+    <button class="nav-tab"        data-tab="history" onclick="switchTab('history')">📜 History</button>
+  </nav>
+
+  <!-- PANELS -->
+  <main class="panels">
+    <div id="tab-play"    class="panel active"></div>
+    <div id="tab-groups"  class="panel"></div>
+    <div id="tab-bracket" class="panel"></div>
+    <div id="tab-stars"   class="panel"></div>
+    <div id="tab-nations" class="panel"></div>
+    <div id="tab-history" class="panel"></div>
+  </main>
+</div>
+
+<!-- MATCH RESULT POPUP -->
+<div id="match-popup" class="match-popup" style="display:none">
+  <div id="match-popup-inner"></div>
+</div>
+
+<!-- TEAM MODAL -->
+<div id="team-modal-overlay" class="overlay" style="display:none" onclick="if(event.target===this)closeTeamModal()">
+  <div class="modal-panel" id="team-modal-content"></div>
+</div>
+
+<!-- INTER-WC MODAL -->
+<div id="interwc-overlay" class="overlay" style="display:none">
+  <div class="modal-panel" id="interwc-content"></div>
+</div>
+
+<!-- SKIP SUMMARY MODAL -->
+<div id="skip-overlay" class="overlay" style="display:none" onclick="if(event.target===this)closeSkip()">
+  <div class="modal-panel" id="skip-content"></div>
+</div>
+
+<!-- SETTINGS -->
+<div id="settings-overlay" class="overlay" style="display:none" onclick="if(event.target===this)closeSettings()">
+  <div class="settings-panel">
+    <div class="settings-header"><span>Settings</span><button class="btn btn-icon" onclick="closeSettings()">✕</button></div>
+    <button class="settings-item" onclick="doExport()">📤 Export Save</button>
+    <label  class="settings-item">📥 Import Save<input type="file" accept=".json" style="display:none" onchange="doImport(event)"></label>
+    <div class="settings-divider"></div>
+    <button class="settings-item danger" onclick="confirmReset()">🗑️ Reset World</button>
+  </div>
+</div>
+
+<!-- CONFIRM -->
+<div id="confirm-overlay" class="overlay" style="display:none">
+  <div class="confirm-panel">
+    <div class="confirm-icon" id="confirm-icon">⚠️</div>
+    <div class="confirm-title" id="confirm-title">Are you sure?</div>
+    <div class="confirm-msg"   id="confirm-msg"></div>
+    <div class="confirm-btns">
+      <button class="btn btn-secondary" onclick="confirmDeny()">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok" onclick="confirmAccept()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
