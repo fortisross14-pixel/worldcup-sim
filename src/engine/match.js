@@ -116,12 +116,12 @@ export function getEffStats(team, isKO = false) {
     s.setPieces = clamp(s.setPieces + Math.round((fx.setPieces || 0) * mult), 10, 130)
   }
 
-  // Morale (mentalityDelta)
+  // Morale (mentalityDelta) — capped tight so it nudges, never dominates
   const md = team.mentalityDelta || 0
   if (md !== 0) {
-    s.mental  = clamp(s.mental  + md,       10, 130)
-    s.attack  = clamp(s.attack  + md * 0.4, 10, 130)
-    s.defense = clamp(s.defense + md * 0.4, 10, 130)
+    s.mental  = clamp(s.mental  + md * 0.5, 10, 130)
+    s.attack  = clamp(s.attack  + md * 0.25, 10, 130)
+    s.defense = clamp(s.defense + md * 0.25, 10, 130)
   }
 
   // Soul bonuses (nation's playing style)
@@ -138,7 +138,13 @@ export function getEffStats(team, isKO = false) {
 }
 
 // ── Match statistics (shots / possession / corners) ───────────
-function dampDiff(gap) { return Math.sign(gap) * Math.sqrt(Math.abs(gap)) * 1.1 }
+// Damping: softens stat differences. Tuned so a 10pt gap is a clear
+// favorite (~70%) but upsets still happen, and a 24pt gap is near-decisive.
+function dampDiff(gap) {
+  const a = Math.abs(gap)
+  const damped = a <= 12 ? a * 0.58 : 12 * 0.58 + (a - 12) * 0.42
+  return Math.sign(gap) * damped
+}
 
 function computeMatchStats(myE, oppE) {
   // First 60 minutes
@@ -167,11 +173,11 @@ function computeMatchStats(myE, oppE) {
 // ── Stats → raw goals ─────────────────────────────────────────
 function statsToGoals(matchStats, myE, possessionPct) {
   const spGap = myE.setPieces - 70
-  const convMax = clamp(0.25 + spGap / 800, 0.18, 0.32)
+  const convMax = clamp(0.18 + spGap / 1000, 0.13, 0.24)
   const conv = Math.random() * convMax
   let shotGoals   = matchStats.shots * conv
-  let possGoals   = possessionPct >= 65 ? 2 : possessionPct >= 55 ? 1 : 0
-  let cornerConv  = clamp(0.05 + spGap * 0.0015, 0.01, 0.12)
+  let possGoals   = possessionPct >= 70 ? 1 : 0
+  let cornerConv  = clamp(0.03 + spGap * 0.001, 0.01, 0.08)
   let cornerGoals = matchStats.corners * cornerConv
   return Math.max(0, shotGoals + possGoals + cornerGoals)
 }
@@ -179,8 +185,8 @@ function statsToGoals(matchStats, myE, possessionPct) {
 // ── Normalize raw float goals to realistic integer score ──────
 function normalize(raw) {
   if (raw <= 1) return Math.round(raw)
-  if (raw >= 11) return Math.min(7, Math.round(0.55 * (raw - 1)))
-  return Math.min(Math.round(0.65 * (raw - 1)), 7)
+  if (raw >= 10) return Math.min(6, Math.round(0.50 * (raw - 1)))
+  return Math.min(Math.round(0.58 * (raw - 1)), 6)
 }
 function preserveWinner(rA, rB, nA, nB) {
   if (rA > rB) { if (nA <= nB) nA = Math.min(7, nB + 1) }
@@ -202,42 +208,37 @@ function rollGoalDist(star) {
 }
 
 function applyStarEffects(stars, myG, oppG, myName, effects) {
+  // Only ONE attacking star can add a goal per match (the best one).
+  // The rest contribute through their stat bonuses (already in getEffStats),
+  // so we don't double-count by stacking everyone's goal rolls.
+  const attackers = (stars || []).filter(s => s && ['FWD','MID'].includes(s.pos))
+  const tierRank = { generational:6, legendary:5, epic:4, rare:3, uncommon:2, common:1 }
+  attackers.sort((a,b) => (tierRank[b.tier]||0) - (tierRank[a.tier]||0))
+  const topAttacker = attackers[0]
+
+  if (topAttacker) {
+    const goals = rollGoalDist(topAttacker)
+    if (goals > 0) {
+      topAttacker.goals = (topAttacker.goals || 0) + goals
+      myG += goals
+      const labels = ['','scores','scores a brace','hat-trick!','4 goals!!']
+      effects.push(`⭐ ${topAttacker.name} ${labels[goals] || `scores ${goals}`} for ${myName}!`)
+    }
+  }
+
+  // GK and DEF still provide saves/blocks (defensive — reduces oppG)
   for (const star of (stars || [])) {
     if (!star) continue
-    if (['FWD', 'MID'].includes(star.pos)) {
-      // Offensive: roll goal distribution
-      const goals = rollGoalDist(star)
-      if (goals > 0) {
-        star.goals = (star.goals || 0) + goals
-        myG += goals
-        const labels = ['','scores','scores a brace','hat-trick!','4 goals!!']
-        effects.push(`⭐ ${star.name} ${labels[goals] || `scores ${goals}`} for ${myName}!`)
-      }
-    } else if (star.pos === 'GK') {
-      // Save probability per opposing goal
+    if (star.pos === 'GK') {
       const saveProb = (SAVE_PROB.GK)[star.tier] || 0.12
       let saved = 0
-      const goalsToCheck = oppG
-      for (let i = 0; i < goalsToCheck; i++) {
-        if (Math.random() < saveProb) { saved++; oppG-- }
-      }
-      if (saved > 0) effects.push(`⭐ ${star.name} makes ${saved > 1 ? saved + ' incredible saves' : 'an incredible save'}!`)
+      for (let i = 0; i < oppG; i++) if (Math.random() < saveProb) { saved++; }
+      if (saved > 0) { oppG -= saved; effects.push(`⭐ ${star.name} makes ${saved>1?saved+' incredible saves':'an incredible save'}!`) }
     } else if (star.pos === 'DEF') {
-      // Block probability + set-piece goal chance from GOAL_DIST
       const blockProb = (SAVE_PROB.DEF)[star.tier] || 0.06
       let blocked = 0
-      const goalsToCheck = oppG
-      for (let i = 0; i < goalsToCheck; i++) {
-        if (Math.random() < blockProb) { blocked++; oppG-- }
-      }
-      if (blocked > 0) effects.push(`⭐ ${star.name} clears ${blocked > 1 ? blocked + ' shots' : 'one'} off the line!`)
-      // DEF scoring from set pieces — use their GOAL_DIST
-      const defGoals = rollGoalDist(star)
-      if (defGoals > 0) {
-        star.goals = (star.goals || 0) + defGoals
-        myG += defGoals
-        effects.push(`⭐ ${star.name} heads in from a corner!`)
-      }
+      for (let i = 0; i < oppG; i++) if (Math.random() < blockProb) { blocked++; }
+      if (blocked > 0) { oppG -= blocked; effects.push(`⭐ ${star.name} clears ${blocked>1?blocked+' off the line':'off the line'}!`) }
     }
   }
   return [myG, oppG]
@@ -320,10 +321,14 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   let g1 = normalize(raw1), g2 = normalize(raw2)
   ;[g1, g2] = preserveWinner(raw1, raw2, g1, g2)
 
-  // Stage 4: star effects
+  // Stage 4: star effects (star goals fold into the base, capped)
   const stars1 = t1.stars || [], stars2 = t2.stars || []
+  const base1 = g1, base2 = g2
   ;[g1, g2] = applyStarEffects(stars1, g1, g2, t1.name, effects)
   ;[g2, g1] = applyStarEffects(stars2, g2, g1, t2.name, effects)
+  // Cap how much one star inflates the score: at most +1 over base, ceiling 6.
+  g1 = Math.min(g1, base1 + 1, 6)
+  g2 = Math.min(g2, base2 + 1, 6)
   g1 = Math.max(0, g1); g2 = Math.max(0, g2)
 
   // Soul: catenaccio KO goal cap
@@ -338,8 +343,8 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   const d1 = calcMentalityChange(r1, r2, g1, g2)
   const d2 = calcMentalityChange(r2, r1, g2, g1)
   const t1Bef = t1.mentalityDelta || 0, t2Bef = t2.mentalityDelta || 0
-  t1.mentalityDelta = clamp(t1Bef + d1, -20, 20)
-  t2.mentalityDelta = clamp(t2Bef + d2, -20, 20)
+  t1.mentalityDelta = clamp(t1Bef + d1, -12, 12)
+  t2.mentalityDelta = clamp(t2Bef + d2, -12, 12)
 
   // Stage 6: extra time / penalties
   let winner = null, penalties = false

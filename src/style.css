@@ -473,3 +473,55 @@ img[src*="flagcdn"] {
   .group-result-tab { min-width: 75px; flex-shrink: 0; }
   .group-results-detail { max-height: none; }
 }
+
+/* ── SORTABLE TABLE HEADERS ──────────────────────────── */
+th.sortable { cursor: pointer; user-select: none; transition: color .15s; }
+th.sortable:hover { color: var(--gold2); }
+
+/* ── HOME SAVE SLOTS ─────────────────────────────────── */
+.slots-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; max-width: 600px; margin: 0 auto;
+}
+.slot-card {
+  background: var(--bg2); border: 1px solid var(--bg4);
+  border-radius: var(--R); padding: 12px; text-align: left;
+  display: flex; flex-direction: column; gap: 8px; min-height: 130px;
+}
+.slot-card.empty-slot {
+  align-items: center; justify-content: center;
+  border-style: dashed; opacity: .6;
+}
+.slot-num {
+  font-family: var(--font-head); font-size: 11px;
+  letter-spacing: .14em; color: var(--gold3);
+}
+.slot-empty-label { color: var(--txt3); font-size: 13px; }
+.slot-info { flex: 1; }
+.slot-wc {
+  font-family: var(--font-head); font-size: 16px;
+  color: var(--gold2); margin-bottom: 4px;
+}
+.slot-meta { font-size: 11px; color: var(--txt2); }
+.slot-date { font-size: 10px; color: var(--txt3); margin-top: 4px; }
+.slot-actions { display: flex; gap: 6px; }
+.slot-actions .btn { flex: 1; }
+@media (max-width: 480px) {
+  .slots-grid { grid-template-columns: 1fr; max-width: 100%; }
+}
+
+/* ── INTER-WC HOST + RATINGS ─────────────────────────── */
+.interwc-host {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px; margin-bottom: 8px;
+  background: linear-gradient(135deg, rgba(201,168,76,.10), var(--bg3));
+  border: 1px solid var(--gold3); border-radius: var(--R);
+}
+.interwc-ratings {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.interwc-rating-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 10px; background: var(--bg3);
+  border-radius: var(--r); font-size: 12px;
+}

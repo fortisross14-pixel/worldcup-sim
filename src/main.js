@@ -1,4 +1,4 @@
-import { S, autoSave, loadGame, clearGame, exportSave, importSave } from './store.js'
+import { S, autoSave, loadGame, clearGame, exportSave, importSave, saveSlot, loadSlot, allSlotInfo, deleteSlot } from './store.js'
 import { ALL_NATIONS, flag, getSoul } from './data/nations.js'
 import { initAllStars, ageAllStars, TIER_LABELS, TIER_COLORS, TIER_ORDER } from './engine/stars.js'
 import {
@@ -111,12 +111,25 @@ function playNextKO() {
     return
   }
   const match = unplayed[0]
+  const isLastInRound = unplayed.length === 1
   showMatchPreview(match.t1, match.t2, round.name, () => {
     const result = playKnockoutMatch(match)
     showMatchPopup(result, round.name, () => {
-      renderBracket(); updatePhaseUI()
-      const left = round.matches.filter(m => !m.played).length
-      $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Advance Round'
+      // If that was the last match in the round, advance immediately
+      if (isLastInRound) {
+        advanceKnockout(); autoSave()
+        if (S.phase === 'done') {
+          updatePhaseUI(); renderBracket(); switchTab('play'); renderPlay()
+          toast(`🏆 ${S.champion?.name} are World Champions!`)
+        } else {
+          updatePhaseUI(); renderBracket()
+          toast(`${S.knockoutRounds[S.knockoutRounds.length-1]?.name} begins!`)
+        }
+      } else {
+        renderBracket(); updatePhaseUI()
+        const left = round.matches.filter(m => !m.played).length
+        $('btn-main').textContent = `▶ Play Next (${left} left)`
+      }
     })
   })
 }
@@ -606,12 +619,16 @@ function renderPlay() {
   const p = S.phase || 'idle'
 
   if (!S.teams?.length) {
-    el.innerHTML = `<div style="text-align:center;padding:48px 16px">
+    el.innerHTML = `<div style="text-align:center;padding:36px 16px">
       <div style="font-size:64px;margin-bottom:12px">⚽</div>
       <div style="font-family:var(--font-head);font-size:36px;letter-spacing:.12em;color:var(--gold2)">WORLD CUP SIMULATOR</div>
-      <div style="color:var(--txt2);margin:8px 0 28px">48 nations. 3 stars each. One champion.</div>
-      <button class="btn btn-primary" onclick="handleMain()" style="padding:12px 32px;font-size:15px">▶ Begin World Cup 1</button>
-    </div>`; return
+      <div style="color:var(--txt2);margin:8px 0 24px">48 nations. 3 stars each. One champion.</div>
+      <button class="btn btn-primary" onclick="handleMain()" style="padding:12px 32px;font-size:15px">▶ Begin New World Cup</button>
+      <div class="sec" style="margin-top:28px">SAVE SLOTS</div>
+      <div id="home-slots" class="slots-grid"></div>
+    </div>`
+    renderHomeSlots()
+    return
   }
 
   let html = ''
@@ -733,7 +750,7 @@ function renderBracket() {
         </div>`
       })
     } else {
-      const slots={32:16,16:8,'Quarter-finals':4,'Semi-finals':2,'Final':1}[name.replace('Round of ','')] || 2
+      const slots = { 'Round of 32':16, 'Round of 16':8, 'Quarter-finals':4, 'Semi-finals':2, 'Final':1 }[name] || 1
       for(let i=0;i<slots;i++) html+=`<div class="bracket-match"><div class="bracket-team tbd">TBD</div><div class="bracket-team tbd">TBD</div></div>`
     }
     html+='</div>'
@@ -830,15 +847,47 @@ window.openStarModal = function(starId, teamName) {
 }
 
 // ── NATIONS tab ───────────────────────────────────────────────
+let nationsSortKey = 'ovr', nationsSortDir = 'desc'
+
 function renderNations() {
   const el = $('tab-nations'); if (!el||!S.teams?.length){if(el)el.innerHTML='<div class="empty">No nations qualified yet</div>';return}
-  const sorted = [...S.teams].sort((a,b)=>b.rating-a.rating)
+  // Compute effective stats for each team once
+  const rows = S.teams.map(t => {
+    const eff = getEffStats(t)
+    const o = Math.round((eff.attack+eff.defense+eff.stamina+eff.mental+eff.setPieces)/5)
+    return { t, eff, o }
+  })
+  const sortVal = r => {
+    switch(nationsSortKey) {
+      case 'name': return r.t.name
+      case 'tier': return ({top:3,mid:2,rest:1})[r.t.tier]||0
+      case 'atk': return r.eff.attack
+      case 'def': return r.eff.defense
+      case 'sta': return r.eff.stamina
+      case 'men': return r.eff.mental
+      case 'set': return r.eff.setPieces
+      case 'ovr': default: return r.o
+    }
+  }
+  rows.sort((a,b) => {
+    const va = sortVal(a), vb = sortVal(b)
+    const cmp = typeof va === 'string' ? va.localeCompare(vb) : va - vb
+    return nationsSortDir === 'desc' ? -cmp : cmp
+  })
+  const arrow = k => nationsSortKey===k ? (nationsSortDir==='desc'?' ▼':' ▲') : ''
+  const th = (k, label, cls='') => `<th class="${cls} sortable" onclick="sortNations('${k}')">${label}${arrow(k)}</th>`
+
   el.innerHTML = `<div class="table-wrap"><table class="data-table">
-    <thead><tr><th>#</th><th>Nation</th><th>Tier</th><th class="num">ATK</th><th class="num">DEF</th><th class="num">STA</th><th class="num">MEN</th><th class="num">SET</th><th class="num">OVR</th><th>Stars</th></tr></thead>
-    <tbody>${sorted.map((t,i)=>{
-      const eff=getEffStats(t)
-      const o=Math.round((eff.attack+eff.defense+eff.stamina+eff.mental+eff.setPieces)/5)
-      const stars=t.stars||[]
+    <thead><tr>
+      <th>#</th>
+      ${th('name','Nation')}
+      ${th('tier','Tier')}
+      ${th('atk','ATK','num')}${th('def','DEF','num')}${th('sta','STA','num')}
+      ${th('men','MEN','num')}${th('set','SET','num')}${th('ovr','OVR','num')}
+      <th>Stars</th>
+    </tr></thead>
+    <tbody>${rows.map((r,i)=>{
+      const {t,eff,o}=r, stars=t.stars||[]
       return`<tr>
         <td style="color:var(--txt3)">${i+1}</td>
         <td class="c-name" onclick="openTeamModal('${t.name}')">${flag(t.cc)} <strong>${t.name}</strong>${t.isHost?' 🏠':''}</td>
@@ -852,6 +901,11 @@ function renderNations() {
         <td>${stars.map(s=>`<span style="color:${tierColor(s.tier)};font-size:14px" title="${s.name} (${s.pos}·${TIER_LABELS[s.tier]})">⭐</span>`).join('')}</td>
       </tr>`}).join('')}
     </tbody></table></div>`
+}
+window.sortNations = function(key) {
+  if (nationsSortKey === key) nationsSortDir = nationsSortDir === 'desc' ? 'asc' : 'desc'
+  else { nationsSortKey = key; nationsSortDir = key === 'name' ? 'asc' : 'desc' }
+  renderNations()
 }
 
 // ── TEAM MODAL ────────────────────────────────────────────────
@@ -1002,13 +1056,32 @@ function renderHistory() {
 
 // ── INTER-WC SCREEN ───────────────────────────────────────────
 function showInterWC() {
-  const { retiring, debuting } = startNewWC()
+  const { retiring, debuting, host, ratingChanges } = startNewWC()
   const NOTABLE = new Set(['generational','legendary','epic','rare'])
   const notableRet = retiring.filter(s=>NOTABLE.has(s.tier))
   const notableDeb = debuting.filter(s=>NOTABLE.has(s.tier))
+  const hostNation = ALL_NATIONS.find(n => n.name === host)
   $('interwc-content').innerHTML = `
     <div style="font-family:var(--font-head);font-size:22px;letter-spacing:.1em;color:var(--gold2);margin-bottom:4px">BETWEEN WORLD CUPS</div>
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">Notable arrivals & departures — WC #${S.wcNumber} begins</div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">WC #${S.wcNumber} preparations</div>
+
+    <div class="interwc-host">
+      <div style="font-size:32px">${flag(host, 32)}</div>
+      <div>
+        <div style="font-family:var(--font-head);font-size:11px;letter-spacing:.12em;color:var(--gold3)">HOST NATION</div>
+        <div style="font-family:var(--font-head);font-size:20px;color:var(--gold2)">${host}</div>
+        <div style="font-size:11px;color:var(--txt2)">Automatically qualifies for WC #${S.wcNumber}</div>
+      </div>
+    </div>
+
+    ${ratingChanges?.length?`<div class="sec">FORM SHIFTS</div>
+      <div class="interwc-ratings">
+        ${ratingChanges.map(r=>`<div class="interwc-rating-row">
+          <span>${flag(r.cc)} ${r.name}</span>
+          <span style="color:${r.delta>0?'var(--green)':'var(--red)'};font-family:var(--font-head)">${r.delta>0?'▲':'▼'} ${r.prev}→${r.next}</span>
+        </div>`).join('')}
+      </div>`:''}
+
     ${notableRet.length?`<div class="sec">RETIRING STARS</div>`+notableRet.map(s=>`
       <div class="interwc-card retire">
         <div style="font-size:20px">${flag(s.cc)}</div>
@@ -1025,7 +1098,6 @@ function showInterWC() {
           <div style="font-size:11px;color:var(--txt2)">${s.teamName} · ${s.pos} · ${s.wcsTotal} WC career ahead</div>
         </div>
       </div>`).join(''):''}
-    ${!notableRet.length&&!notableDeb.length?'<div class="empty">Quiet offseason — no notable changes</div>':''}
     <button class="btn btn-primary" style="width:100%;margin-top:14px" onclick="continueNewWC()">Begin WC #${S.wcNumber} ▶</button>
   `
   $('interwc-overlay').style.display='flex'
@@ -1038,7 +1110,61 @@ window.continueNewWC = function() {
 }
 
 // ── SETTINGS ──────────────────────────────────────────────────
-window.openSettings  = () => { $('settings-overlay').style.display='flex' }
+// ── HOME SAVE SLOTS (3 slots) ─────────────────────────────────
+async function renderHomeSlots() {
+  const el = $('home-slots'); if (!el) return
+  const slots = await allSlotInfo()
+  el.innerHTML = [1,2,3].map(n => {
+    const s = slots[n]
+    if (!s) {
+      return `<div class="slot-card empty-slot">
+        <div class="slot-num">SLOT ${n}</div>
+        <div class="slot-empty-label">Empty</div>
+      </div>`
+    }
+    const champs = (s.history||[]).filter(h=>h.champion).length
+    return `<div class="slot-card">
+      <div class="slot-num">SLOT ${n}</div>
+      <div class="slot-info">
+        <div class="slot-wc">World Cup #${s.wcNumber||1}</div>
+        <div class="slot-meta">${(s.history||[]).length} editions played</div>
+        ${s.history?.length?`<div class="slot-meta">Last: ${flag(s.history[s.history.length-1].cc)} ${s.history[s.history.length-1].champion}</div>`:''}
+        <div class="slot-date">${new Date(s.savedAt).toLocaleDateString()}</div>
+      </div>
+      <div class="slot-actions">
+        <button class="btn btn-sm btn-primary" onclick="loadHomeSlot(${n})">Load</button>
+        <button class="btn btn-sm" onclick="deleteHomeSlot(${n})">✕</button>
+      </div>
+    </div>`
+  }).join('')
+}
+
+window.loadHomeSlot = async function(n) {
+  try {
+    await loadSlot(n)
+    updatePhaseUI(); renderPlay()
+    if (S.groups?.length) renderGroups()
+    if (S.knockoutRounds?.length) renderBracket()
+    toast(`Loaded Slot ${n} — WC #${S.wcNumber}`)
+  } catch(e) { toast('Slot is empty') }
+}
+window.deleteHomeSlot = async function(n) {
+  await deleteSlot(n)
+  renderHomeSlots()
+  toast(`Slot ${n} cleared`)
+}
+window.saveToSlot = async function(n) {
+  await saveSlot(n)
+  toast(`Saved to Slot ${n}`)
+  closeSettings()
+}
+
+window.openSettings  = () => {
+  // Refresh the save-slot buttons in settings each open
+  const slotBar = $('settings-slots')
+  if (slotBar) slotBar.innerHTML = [1,2,3].map(n=>`<button class="settings-item" onclick="saveToSlot(${n})">💾 Save to Slot ${n}</button>`).join('')
+  $('settings-overlay').style.display='flex'
+}
 window.closeSettings = () => { $('settings-overlay').style.display='none' }
 window.doExport = () => { closeSettings(); exportSave(); toast('Exported!') }
 window.doImport = async function(ev) {

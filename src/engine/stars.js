@@ -81,7 +81,7 @@ export function ageAllStars(wcNumber) {
       s.careerMult = careerMult(s.wcsPlayed, s.wcsTotal)
       // Save ratings history
       if (s.ratings?.length) {
-        s.allTimeRatings = [...(s.allTimeRatings || []), ...s.ratings]
+        s.allTimeRatings = [...(s.allTimeRatings || []), ...s.ratings].slice(-60)
         s.ratings = []
       }
       s.goals = 0  // reset per-WC goals
@@ -133,7 +133,7 @@ export function syncStarsBack(nation, teamStars) {
       ns.medals.sf     = (ns.medals.sf     || 0) + (ts.medals.sf     || 0)
     }
     if (ts.ratings?.length) {
-      ns.allTimeRatings = [...(ns.allTimeRatings || []), ...ts.ratings]
+      ns.allTimeRatings = [...(ns.allTimeRatings || []), ...ts.ratings].slice(-60)
     }
   })
 }

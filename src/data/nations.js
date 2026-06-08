@@ -101,23 +101,40 @@ export const ALL_NATIONS = [
   { name:'Mali',         cc:'ml', conf:'CAF', tier:'rest',base:68, hist:1 },
   { name:'South Africa', cc:'za', conf:'CAF', tier:'rest',base:67, hist:5 },
 
-  // ── AFC (5 slots) ─────────────────────────────────────────────
+  // ── AFC (8 slots, ~14 teams compete) ──────────────────────────
   { name:'South Korea', cc:'kr', conf:'AFC', tier:'mid', base:78, hist:25 },
   { name:'Japan',       cc:'jp', conf:'AFC', tier:'mid', base:77, hist:15 },
   { name:'Iran',        cc:'ir', conf:'AFC', tier:'mid', base:75, hist:10 },
   { name:'Australia',   cc:'au', conf:'AFC', tier:'mid', base:74, hist:10 },
   { name:'Saudi Arabia',cc:'sa', conf:'AFC', tier:'rest',base:71, hist:5 },
-  { name:'Qatar',       cc:'qa', conf:'AFC', tier:'rest',base:68, hist:3 },
-  { name:'China',       cc:'cn', conf:'AFC', tier:'rest',base:67, hist:3 },
-  { name:'Iraq',        cc:'iq', conf:'AFC', tier:'rest',base:66, hist:5 },
+  { name:'Qatar',       cc:'qa', conf:'AFC', tier:'rest',base:69, hist:3 },
+  { name:'Iraq',        cc:'iq', conf:'AFC', tier:'rest',base:67, hist:5 },
+  { name:'UAE',         cc:'ae', conf:'AFC', tier:'rest',base:66, hist:2 },
+  { name:'Uzbekistan',  cc:'uz', conf:'AFC', tier:'rest',base:66, hist:1 },
+  { name:'China',       cc:'cn', conf:'AFC', tier:'rest',base:64, hist:3 },
+  { name:'Jordan',      cc:'jo', conf:'AFC', tier:'rest',base:63, hist:1 },
+  { name:'Bahrain',     cc:'bh', conf:'AFC', tier:'rest',base:61, hist:1 },
+  { name:'Thailand',    cc:'th', conf:'AFC', tier:'rest',base:60, hist:1 },
+  { name:'Vietnam',     cc:'vn', conf:'AFC', tier:'rest',base:60, hist:1 },
 
-  // ── OFC (1 slot) ──────────────────────────────────────────────
+  // ── CONCACAF (6 slots, ~10 teams compete) ─────────────────────
+  { name:'Costa Rica',  cc:'cr', conf:'CONCACAF', tier:'rest',base:72, hist:10 },
+  { name:'Honduras',    cc:'hn', conf:'CONCACAF', tier:'rest',base:68, hist:5 },
+  { name:'Jamaica',     cc:'jm', conf:'CONCACAF', tier:'rest',base:66, hist:3 },
+  { name:'Panama',      cc:'pa', conf:'CONCACAF', tier:'rest',base:65, hist:2 },
+  { name:'El Salvador', cc:'sv', conf:'CONCACAF', tier:'rest',base:62, hist:2 },
+  { name:'Guatemala',   cc:'gt', conf:'CONCACAF', tier:'rest',base:61, hist:1 },
+
+  // ── OFC (1 slot, 4 teams compete) ─────────────────────────────
   { name:'New Zealand', cc:'nz', conf:'OFC', tier:'rest', base:64, hist:3 },
+  { name:'Fiji',        cc:'fj', conf:'OFC', tier:'rest', base:56, hist:1 },
+  { name:'Tahiti',      cc:'pf', conf:'OFC', tier:'rest', base:53, hist:1 },
+  { name:'Solomon Islands', cc:'sb', conf:'OFC', tier:'rest', base:52, hist:1 },
 ]
 
-// Confederation qualification slots (for 48-team WC format)
+// Confederation qualification slots (48-team WC format)
 export const CONF_SLOTS = {
-  UEFA: 16, CONMEBOL: 6, CONCACAF: 6, CAF: 9, AFC: 8, OFC: 1, HOST: 1, PLAYOFF: 1
+  UEFA: 16, CONMEBOL: 6, CONCACAF: 6, CAF: 9, AFC: 8, OFC: 1, HOST: 1
 }
 
 // Flag as <img> from flagcdn.com — reliable on all mobile browsers

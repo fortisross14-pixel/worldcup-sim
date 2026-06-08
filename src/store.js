@@ -99,6 +99,36 @@ export async function clearGame() {
   await dbDelete(AUTO_KEY).catch(() => {})
 }
 
+// ── Named save slots (3-slot home page) ───────────────────────
+export async function saveSlot(slotNum) {
+  const data = buildSave()
+  data.slotNum = slotNum
+  await dbPut('slot_' + slotNum, data)
+}
+
+export async function loadSlot(slotNum) {
+  const d = await dbGet('slot_' + slotNum)
+  if (!d) throw new Error('Slot empty')
+  Object.assign(S, d)
+  await autoSave()
+}
+
+export async function getSlotInfo(slotNum) {
+  return await dbGet('slot_' + slotNum)
+}
+
+export async function deleteSlot(slotNum) {
+  await dbDelete('slot_' + slotNum).catch(() => {})
+}
+
+export async function allSlotInfo() {
+  const out = {}
+  for (let i = 1; i <= 3; i++) {
+    out[i] = await dbGet('slot_' + i)
+  }
+  return out
+}
+
 export function exportSave() {
   const data = buildSave()
   const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' })

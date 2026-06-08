@@ -45,9 +45,10 @@ export function runQualification() {
   // Re-roll stats for each nation each WC (form varies)
   ALL_NATIONS.forEach(n => { n.stats = rollStats(n.tier || 'rest') })
 
-  // Pick host
-  const hostNation = ALL_NATIONS[Math.floor(Math.random() * ALL_NATIONS.length)]
-  S.hostNation = hostNation.name
+  // Host already chosen by startNewWC (or pick now for first WC)
+  if (!S.hostNation) {
+    S.hostNation = ALL_NATIONS[Math.floor(Math.random() * ALL_NATIONS.length)].name
+  }
 
   // Always-qualified nations
   const always = ALL_NATIONS.filter(n => n.always || n.name === S.hostNation)
@@ -180,20 +181,26 @@ export function groupStandings(grp) {
 
 // ── Build knockout (top 2 from each group = 24 teams → R24) ──
 export function buildKnockout() {
-  const qualifiers = []
+  // 12 groups → top 2 (24) + 8 best third-placed = 32 teams
+  const top2 = [], thirds = []
   S.groups.forEach(grp => {
-    const top2 = groupStandings(grp).slice(0, 2)
-    top2.forEach(t => { qualifiers.push(t); S.roundReached[t.name] = 'Round of 32' })
-    groupStandings(grp).slice(2).forEach(t => { S.roundReached[t.name] = 'Group' })
+    const standings = groupStandings(grp)
+    standings.slice(0, 2).forEach(t => { top2.push(t); S.roundReached[t.name] = 'Round of 32' })
+    if (standings[2]) thirds.push(standings[2])
+    standings.slice(3).forEach(t => { S.roundReached[t.name] = 'Group' })
   })
-  // Pair winners vs runners from different groups
-  const winners = S.groups.map(g => groupStandings(g)[0])
-  const runners = S.groups.map(g => groupStandings(g)[1])
+  // Best 8 third-placed teams by points/GD/GF
+  thirds.sort((a,b) => (b.pts||0)-(a.pts||0) || (b.gd||0)-(a.gd||0) || (b.gf||0)-(a.gf||0))
+  const bestThirds = thirds.slice(0, 8)
+  bestThirds.forEach(t => S.roundReached[t.name] = 'Round of 32')
+  thirds.slice(8).forEach(t => { if (!S.roundReached[t.name]) S.roundReached[t.name] = 'Group' })
+
+  // Seed: 32 teams, seed by rating so strong teams are spread out
+  const all32 = [...top2, ...bestThirds].sort((a,b) => b.rating - a.rating)
+  // Snake-pair: best vs worst
   const matches = []
-  // Cross-pair: A1 vs B2, B1 vs A2, etc.
-  for (let i = 0; i < 12; i += 2) {
-    matches.push({ t1:winners[i], t2:runners[i+1], played:false, result:null })
-    matches.push({ t1:winners[i+1], t2:runners[i], played:false, result:null })
+  for (let i = 0; i < 16; i++) {
+    matches.push({ t1: all32[i], t2: all32[31 - i], played:false, result:null })
   }
   S.knockoutRounds = [{ name:'Round of 32', matches }]
   autoSave()
@@ -226,7 +233,7 @@ export function advanceKnockout() {
     return
   }
 
-  const nextName = { 24:'Round of 16', 16:'Quarter-finals', 8:'Semi-finals', 4:'Final' }[winners.length] || 'Next Round'
+  const nextName = { 16:'Round of 16', 8:'Quarter-finals', 4:'Semi-finals', 2:'Final' }[winners.length] || 'Next Round'
   const newMatches = []
   for (let i = 0; i < winners.length; i += 2)
     newMatches.push({ t1:winners[i], t2:winners[i+1], played:false, result:null })
@@ -285,8 +292,26 @@ export function startNewWC() {
   S.scorers = {}; S.teamGoals = {}; S.teamGoalsConceded = {}
   S.allMatchResults = []; S.roundReached = {}; S.seasonAwards = {}
   S.teams?.forEach(t => { t.pts=0;t.w=0;t.d=0;t.l=0;t.gf=0;t.ga=0;t.gd=0;t.mentalityDelta=0 })
-  resetNameTracking()  // allow names to be reused across WC cycles
-  return ageAllStars(S.wcNumber)  // returns { retiring, debuting }
+  resetNameTracking()
+
+  // Pick the host for the upcoming WC
+  S.hostNation = ALL_NATIONS[Math.floor(Math.random() * ALL_NATIONS.length)].name
+
+  // Capture rating shifts: compare each top/mid nation's new season rating
+  // vs their previous one (form swings between cycles)
+  const ratingChanges = []
+  ALL_NATIONS.forEach(n => {
+    const prev = n._lastRating ?? n.base
+    const next = seasonRating(n)
+    n._lastRating = next
+    if (Math.abs(next - prev) >= 4 && (n.tier === 'top' || n.tier === 'mid')) {
+      ratingChanges.push({ name:n.name, cc:n.cc, prev, next, delta: next - prev })
+    }
+  })
+  ratingChanges.sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta))
+
+  const { retiring, debuting } = ageAllStars(S.wcNumber)
+  return { retiring, debuting, host: S.hostNation, ratingChanges: ratingChanges.slice(0, 8) }
 }
 
 export { initAllStars, ageAllStars }
