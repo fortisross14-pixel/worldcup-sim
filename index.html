@@ -27,27 +27,29 @@
 
   <!-- NAV -->
   <nav class="nav">
-    <button class="nav-tab active" data-tab="play"    onclick="switchTab('play')">🏠 Home</button>
-    <button class="nav-tab"        data-tab="groups"  onclick="switchTab('groups')">👥 Groups</button>
-    <button class="nav-tab"        data-tab="bracket" onclick="switchTab('bracket')">🏆 Bracket</button>
-    <button class="nav-tab"        data-tab="stars"   onclick="switchTab('stars')">⭐ Stars</button>
-    <button class="nav-tab"        data-tab="nations" onclick="switchTab('nations')">📊 Nations</button>
-    <button class="nav-tab"        data-tab="history" onclick="switchTab('history')">📜 History</button>
+    <button class="nav-tab active" data-tab="play"       onclick="switchTab('play')">🏠 Home</button>
+    <button class="nav-tab"        data-tab="tournament" onclick="switchTab('tournament')">🏟️ Tournament</button>
+    <button class="nav-tab"        data-tab="groups"     onclick="switchTab('groups')">👥 Groups</button>
+    <button class="nav-tab"        data-tab="bracket"    onclick="switchTab('bracket')">🏆 Bracket</button>
+    <button class="nav-tab"        data-tab="stars"      onclick="switchTab('stars')">⭐ Stars</button>
+    <button class="nav-tab"        data-tab="nations"    onclick="switchTab('nations')">📊 Nations</button>
+    <button class="nav-tab"        data-tab="history"    onclick="switchTab('history')">📜 History</button>
   </nav>
 
   <!-- PANELS -->
   <main class="panels">
-    <div id="tab-play"    class="panel active"></div>
-    <div id="tab-groups"  class="panel"></div>
-    <div id="tab-bracket" class="panel"></div>
-    <div id="tab-stars"   class="panel"></div>
-    <div id="tab-nations" class="panel"></div>
-    <div id="tab-history" class="panel"></div>
+    <div id="tab-play"       class="panel active"></div>
+    <div id="tab-tournament" class="panel"></div>
+    <div id="tab-groups"     class="panel"></div>
+    <div id="tab-bracket"    class="panel"></div>
+    <div id="tab-stars"      class="panel"></div>
+    <div id="tab-nations"    class="panel"></div>
+    <div id="tab-history"    class="panel"></div>
   </main>
 </div>
 
-<!-- MATCH RESULT POPUP -->
-<div id="match-popup" class="match-popup" style="display:none">
+<!-- MATCH PLAYBACK POPUP (full-screen modal) -->
+<div id="match-popup" style="display:none">
   <div id="match-popup-inner"></div>
 </div>
 

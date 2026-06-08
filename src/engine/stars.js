@@ -40,7 +40,7 @@ export function genStar(nation, wcNumber, overrideWcsPlayed = null) {
     id: `${nation.name}_${tier}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
     name: getPlayerName(nation.cc),
     pos, tier,
-    statBonus: { ...STAR_BONUSES[pos] },
+    statBonus: { ...(STAR_BONUSES[pos]?.[tier] || STAR_BONUSES[pos]?.common || {}) },
     careerMult: careerMult(wcsPlayed, wcsTotal),
     teamName: nation.name, cc: nation.cc,
     wcsTotal, wcsPlayed, wcsRemaining,

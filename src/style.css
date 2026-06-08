@@ -205,3 +205,109 @@ table.data-table .c-name:hover{color:var(--gold2);text-decoration:underline}
   .champ-name{font-size:22px}
   .header-left .wc-badge{display:none}
 }
+
+/* ── MATCH PLAYBACK MODAL (CL-style) ─────────────────── */
+.match-popup-modal {
+  position:fixed;inset:0;background:rgba(0,0,0,0.82);
+  display:flex;align-items:center;justify-content:center;
+  z-index:200;padding:14px;animation:pbFadeIn .25s ease;
+}
+@keyframes pbFadeIn{from{opacity:0}to{opacity:1}}
+
+.playback-card{
+  background:linear-gradient(160deg,var(--bg2),var(--bg));
+  border:1px solid var(--bg5);border-radius:var(--R);
+  width:100%;max-width:520px;max-height:92vh;overflow-y:auto;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);padding:18px 20px 16px;
+}
+.playback-card::-webkit-scrollbar{width:3px}
+.playback-card::-webkit-scrollbar-thumb{background:var(--bg5)}
+
+.playback-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--bg4)}
+.playback-round{font-family:var(--font-head);font-size:11px;letter-spacing:.14em;color:var(--txt3);text-transform:uppercase}
+.playback-clock{font-family:var(--font-head);font-weight:700;font-size:22px;color:var(--blue);letter-spacing:.04em}
+.playback-clock.final{color:var(--gold);letter-spacing:.14em}
+
+.playback-score-row{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-bottom:14px;padding:12px 6px}
+.playback-team-block{display:flex;gap:8px;align-items:stretch;position:relative}
+.playback-team-stripe{width:4px;border-radius:4px;background:var(--gold3);flex-shrink:0}
+.playback-team-inner{display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:linear-gradient(90deg,rgba(201,168,76,.14) 0%,transparent 90%);border-radius:6px;padding:6px 10px;flex:1}
+.playback-team-block.right{flex-direction:row-reverse}
+.playback-team-block.right .playback-team-inner{align-items:flex-end;text-align:right;background:linear-gradient(270deg,rgba(201,168,76,.14) 0%,transparent 90%)}
+.playback-team-name{font-family:var(--font-head);font-weight:700;font-size:16px;color:var(--txt);letter-spacing:.03em}
+.playback-team-star{font-size:11px;color:var(--txt3);font-style:italic}
+.playback-score{font-family:var(--font-head);font-weight:700;font-size:36px;color:var(--txt2);letter-spacing:.03em;padding:0 12px;display:flex;align-items:center;gap:6px}
+.playback-score .lead{color:var(--gold);font-size:42px}
+.playback-score .dash{color:var(--txt3);font-size:26px}
+
+.playback-progress-wrap{height:4px;background:var(--bg4);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.playback-progress{height:100%;background:linear-gradient(90deg,var(--gold3),var(--gold2));border-radius:3px;transition:width .85s ease}
+
+.playback-events{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-height:36px}
+.playback-event{display:flex;align-items:center;gap:7px;padding:5px 10px;background:var(--bg3);border-radius:var(--r);border-left:3px solid var(--bg4);font-size:12px;animation:slideIn .35s ease}
+@keyframes slideIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.playback-event.left{border-left-color:var(--gold3)}
+.playback-event.right{border-left-color:var(--gold3);flex-direction:row-reverse;border-left:none;border-right:3px solid var(--gold3);text-align:right}
+.playback-event.star.left{border-left-color:var(--gold)}
+.playback-event.star.right{border-right-color:var(--gold)}
+.playback-event.muted{opacity:.5}
+.event-min{font-family:var(--font-head);font-weight:700;font-size:11px;color:var(--txt3);min-width:34px}
+.event-icon{font-size:12px}
+.event-name{color:var(--txt2);flex:1}
+.playback-event.star .event-name{color:var(--gold);font-weight:600}
+
+.playback-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--bg4)}
+
+/* ── PLAYBACK STATS ───────────────────────────── */
+.playback-stats-grid{display:grid;grid-template-columns:1fr 100px 1fr;gap:4px 10px;margin:12px 0 4px;padding:12px;background:var(--bg3);border-radius:var(--r);align-items:center}
+.stat-cell{text-align:center;font-size:12px}
+.stat-cell.stat-team-l,.stat-cell.stat-team-r{font-family:var(--font-head);font-weight:700;font-size:11px;color:var(--txt2);letter-spacing:.04em;padding-bottom:5px;border-bottom:1px solid var(--bg4);margin-bottom:4px}
+.stat-cell.stat-team-l{text-align:left}.stat-cell.stat-team-r{text-align:right}
+.stat-cell.stat-label{font-family:var(--font-head);font-size:9px;letter-spacing:.14em;color:var(--txt3);text-transform:uppercase;text-align:center}
+.stat-cell.stat-num{font-family:var(--font-head);font-weight:700;font-size:15px;color:var(--txt)}
+.playback-stats-grid>.stat-cell.stat-num:nth-child(3n+1){text-align:left}
+.playback-stats-grid>.stat-cell.stat-num:nth-child(3n){text-align:right}
+
+/* ── PLAYBACK PAIR (stars/coach blocks) ─────── */
+.playback-pair{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}
+.playback-pair .playback-team-block{background:var(--bg3);border:1px solid var(--bg4);border-radius:var(--r);padding:9px 11px;display:flex;flex-direction:column;gap:5px;align-items:stretch;min-width:0}
+.playback-block-label{font-family:var(--font-head);font-size:9px;letter-spacing:.14em;color:var(--txt3);text-transform:uppercase;margin-bottom:3px}
+.playback-pair .playback-team-block.right .playback-block-label{text-align:right}
+.playback-star-row{display:grid;grid-template-columns:1fr auto auto;gap:5px;font-size:11px;align-items:center}
+.playback-pair .playback-team-block.right .playback-star-row{grid-template-columns:auto auto 1fr;text-align:right}
+.star-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.muted{color:var(--txt3);font-style:italic}
+.rating-val{font-family:var(--font-head);font-weight:700;font-size:13px;padding:1px 5px;border-radius:4px;background:rgba(255,255,255,.04)}
+.rating-val.rating-gold{color:var(--gold);background:rgba(255,215,0,.10)}
+.rating-val.rating-green{color:var(--green);background:rgba(76,175,80,.10)}
+.rating-val.rating-white{color:var(--txt)}
+.rating-val.rating-red{color:var(--red);background:rgba(244,67,54,.10)}
+
+.playback-effects{margin:8px 0;display:flex;flex-direction:column;gap:3px}
+.effect-line{font-size:11px;color:var(--txt3);padding:3px 9px;background:var(--bg3);border-radius:4px;border-left:2px solid var(--bg4)}
+.effect-line.star{border-left-color:var(--gold);color:var(--txt2)}
+
+/* ── TOURNAMENT TAB ───────────────────────────── */
+.sub-tab-row{display:flex;gap:6px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--bg4);flex-wrap:wrap}
+.sub-tab{background:var(--bg3);border:1px solid var(--bg4);color:var(--txt2);padding:6px 14px;border-radius:20px;cursor:pointer;font-family:var(--font-head);font-size:12px;letter-spacing:.04em;transition:all .15s}
+.sub-tab:hover{background:var(--bg4);color:var(--txt)}
+.sub-tab.active{background:var(--gold3);border-color:var(--gold);color:var(--bg)}
+
+/* ── QUALIFYING GRID ──────────────────────────── */
+.qualify-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.qualify-card{background:var(--bg2);border:1px solid var(--bg4);border-radius:var(--R);overflow:hidden}
+.qualify-card-head{display:flex;align-items:center;gap:8px;padding:9px 12px;background:var(--bg3);border-bottom:1px solid var(--bg4)}
+.qualify-league{flex:1;font-family:var(--font-head);font-weight:700;font-size:13px;letter-spacing:.04em;color:var(--txt)}
+.qualify-slots{font-family:var(--font-head);font-size:10px;color:var(--txt3);letter-spacing:.1em;background:var(--bg4);padding:2px 8px;border-radius:10px}
+.qualify-body{padding:4px 0}
+.qualify-row{display:grid;grid-template-columns:22px 1fr auto;gap:6px;align-items:center;padding:5px 12px;font-size:11px;color:var(--txt3);border-bottom:1px solid rgba(255,255,255,.025)}
+.qualify-row:last-child{border-bottom:none}
+.qualify-row.qualifies{color:var(--txt2);background:rgba(201,168,76,.06)}
+.qualify-rank{font-family:var(--font-head);font-weight:700;font-size:10px;color:var(--txt3);text-align:center}
+.qualify-row.qualifies .qualify-rank{color:var(--gold3)}
+
+/* ── STATS GRID ───────────────────────────────── */
+.cl-stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.cl-stat-card.card{margin-bottom:0}
+.cl-stat-title{font-family:var(--font-head);font-size:11px;letter-spacing:.12em;color:var(--txt3);text-transform:uppercase;margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--bg4)}
+table.data-table.compact td{padding:4px 6px;font-size:11px}

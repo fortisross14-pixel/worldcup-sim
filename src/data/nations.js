@@ -153,3 +153,51 @@ export function getPlayerName(cc) {
   const l = pool.l[Math.floor(Math.random() * pool.l.length)]
   return `${f} ${l}`
 }
+
+// ── Nation Souls ─────────────────────────────────────────────
+// Each nation has a soul that shapes their playing style
+export const NATION_SOULS = {
+  // CONMEBOL
+  'Brazil':        { id:'jogo_bonito',      name:'Jogo Bonito',       desc:'Beautiful game — +8 ATK, +8 SET, −4 DEF',      fx:{attack:8,setPieces:8,defense:-4}, goalBonus:0.15 },
+  'Argentina':     { id:'competitive_beast',name:'Competitive Beast', desc:'Never say die — +6 DEF, +8 MEN',               fx:{defense:6,mental:8}, goalBonus:0 },
+  'Uruguay':       { id:'competitive_beast',name:'Competitive Beast', desc:'Never say die — +6 DEF, +8 MEN',               fx:{defense:6,mental:8}, goalBonus:0 },
+  'Colombia':      { id:'jogo_bonito',      name:'Jogo Bonito',       desc:'Flair football — +6 ATK, +6 SET, −2 DEF',      fx:{attack:6,setPieces:6,defense:-2}, goalBonus:0.08 },
+  'Chile':         { id:'competitive_beast',name:'Competitive Beast', desc:'+4 DEF, +6 MEN',                               fx:{defense:4,mental:6}, goalBonus:0 },
+  // UEFA Top
+  'Germany':       { id:'machine',          name:'German Machine',    desc:'Relentless efficiency — +6 DEF, +6 MEN, +4 STA', fx:{defense:6,mental:6,stamina:4}, goalBonus:0 },
+  'Italy':         { id:'catenaccio',       name:'Catenaccio',        desc:'Iron defense — +12 DEF, −6 ATK',               fx:{defense:12,attack:-6}, koGaCap:2, goalBonus:0 },
+  'Spain':         { id:'tiki_taka',        name:'Tiki-Taka',         desc:'Possession masters — +8 SET, +8 MEN, +6 ATK',  fx:{setPieces:8,mental:8,attack:6}, goalBonus:0 },
+  'France':        { id:'clinical',         name:'Clinical',          desc:'Cold-blooded finishing — +8 ATK, +6 MEN',      fx:{attack:8,mental:6}, goalBonus:0 },
+  'England':       { id:'physical',         name:'Physical Kings',    desc:'High intensity — +8 STA, +6 ATK',              fx:{stamina:8,attack:6}, goalBonus:0 },
+  // UEFA Mid
+  'Netherlands':   { id:'total_football',   name:'Total Football',    desc:'All attack all defend — +6 ATK, +6 DEF, +6 MEN', fx:{attack:6,defense:6,mental:6}, goalBonus:0 },
+  'Portugal':      { id:'clinical',         name:'Clinical',          desc:'Stars shine brightest — +8 ATK, +6 MEN',       fx:{attack:8,mental:6}, goalBonus:0 },
+  'Belgium':       { id:'physical',         name:'Physical Kings',    desc:'+8 STA, +4 ATK',                               fx:{stamina:8,attack:4}, goalBonus:0 },
+  'Croatia':       { id:'competitive_beast',name:'Competitive Beast', desc:'Never quit — +8 DEF, +8 MEN',                 fx:{defense:8,mental:8}, goalBonus:0 },
+  'Serbia':        { id:'competitive_beast',name:'Competitive Beast', desc:'+6 DEF, +6 MEN',                               fx:{defense:6,mental:6}, goalBonus:0 },
+  'Denmark':       { id:'team_spirit',      name:'Team Spirit',       desc:'United as one — +6 MEN, +4 DEF, +4 STA',      fx:{mental:6,defense:4,stamina:4}, goalBonus:0 },
+  'Sweden':        { id:'physical',         name:'Physical Kings',    desc:'+8 STA, +4 DEF',                               fx:{stamina:8,defense:4}, goalBonus:0 },
+  'Turkey':        { id:'competitive_beast',name:'Competitive Beast', desc:'+6 DEF, +6 MEN',                               fx:{defense:6,mental:6}, goalBonus:0 },
+  'Poland':        { id:'physical',         name:'Physical Kings',    desc:'+6 STA, +4 DEF',                               fx:{stamina:6,defense:4}, goalBonus:0 },
+  'Switzerland':   { id:'compact_defense',  name:'Compact Defense',   desc:'+8 DEF, +4 MEN',                               fx:{defense:8,mental:4}, goalBonus:0 },
+  // AFC
+  'Japan':         { id:'running_machine',  name:'Running Machine',   desc:'High press — +8 STA, +4 ATK',                 fx:{stamina:8,attack:4}, goalBonus:0 },
+  'South Korea':   { id:'running_machine',  name:'Running Machine',   desc:'+8 STA, +4 MEN',                              fx:{stamina:8,mental:4}, goalBonus:0 },
+  'Iran':          { id:'compact_defense',  name:'Compact Defense',   desc:'+8 DEF, +4 MEN',                               fx:{defense:8,mental:4}, goalBonus:0 },
+  'Australia':     { id:'physical',         name:'Physical Kings',    desc:'+8 STA, +4 ATK',                               fx:{stamina:8,attack:4}, goalBonus:0 },
+  // CAF
+  'Nigeria':       { id:'physical',         name:'Physical Kings',    desc:'Raw athleticism — +8 STA, +6 ATK',            fx:{stamina:8,attack:6}, goalBonus:0 },
+  'Senegal':       { id:'physical',         name:'Physical Kings',    desc:'+8 STA, +4 ATK',                               fx:{stamina:8,attack:4}, goalBonus:0 },
+  'Morocco':       { id:'compact_defense',  name:'Compact Defense',   desc:'+8 DEF, +4 MEN',                               fx:{defense:8,mental:4}, goalBonus:0 },
+  'Ghana':         { id:'running_machine',  name:'Running Machine',   desc:'+6 STA, +4 ATK',                               fx:{stamina:6,attack:4}, goalBonus:0 },
+  'Ivory Coast':   { id:'physical',         name:'Physical Kings',    desc:'+8 STA, +4 ATK',                               fx:{stamina:8,attack:4}, goalBonus:0 },
+  'Cameroon':      { id:'physical',         name:'Physical Kings',    desc:'+6 STA, +4 ATK',                               fx:{stamina:6,attack:4}, goalBonus:0 },
+  'Egypt':         { id:'competitive_beast',name:'Competitive Beast', desc:'+4 DEF, +6 MEN',                               fx:{defense:4,mental:6}, goalBonus:0 },
+  // CONCACAF
+  'Mexico':        { id:'competitive_beast',name:'Competitive Beast', desc:'Hard to beat — +4 DEF, +6 MEN',               fx:{defense:4,mental:6}, goalBonus:0 },
+  'United States': { id:'physical',         name:'Physical Kings',    desc:'+6 STA, +4 ATK',                               fx:{stamina:6,attack:4}, goalBonus:0 },
+}
+
+export function getSoul(nationName) {
+  return NATION_SOULS[nationName] || { id:'team_spirit', name:'Team Spirit', desc:'United as one — +4 MEN, +2 DEF', fx:{mental:4,defense:2}, goalBonus:0 }
+}

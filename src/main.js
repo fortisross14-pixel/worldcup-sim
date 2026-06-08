@@ -1,4 +1,5 @@
 import { S, autoSave, loadGame, clearGame, exportSave, importSave } from './store.js'
+import { getSoul } from './data/nations.js'
 import { ALL_NATIONS, flag } from './data/nations.js'
 import { initAllStars, ageAllStars, TIER_LABELS, TIER_COLORS, TIER_ORDER } from './engine/stars.js'
 import {
@@ -6,6 +7,10 @@ import {
   playKnockoutMatch, advanceKnockout, startNewWC
 } from './engine/season.js'
 import { getEffStats, ovr } from './engine/match.js'
+
+// ── Playback state ────────────────────────────────────────────
+let _playbackTimer = null
+let _playbackSkip = false
 
 // ── Helpers ───────────────────────────────────────────────────
 const $ = id => document.getElementById(id)
@@ -30,8 +35,9 @@ window.switchTab = function(tab) {
   if (tab==='bracket') renderBracket()
   if (tab==='stars')   renderStars()
   if (tab==='nations') renderNations()
-  if (tab==='history') renderHistory()
-  if (tab==='play')    renderPlay()
+  if (tab==='history')    renderHistory()
+  if (tab==='tournament') renderTournament()
+  if (tab==='play')       renderPlay()
 }
 
 // ── Phase button ──────────────────────────────────────────────
@@ -84,11 +90,13 @@ function playNextGroup() {
     autoSave(); updatePhaseUI(); switchTab('bracket')
     toast('Group stage done — Round of 32!'); return
   }
-  const result = playGroupMatch(unplayed[0])
-  showMatchPopup(result, 'Group Stage')
-  renderGroups(); updatePhaseUI()
-  const left = S.groupMatches.filter(m => !m.played).length
-  $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Complete Groups'
+  const match = unplayed[0]
+  const result = playGroupMatch(match)
+  showMatchPopup(result, 'Group Stage', () => {
+    renderGroups(); updatePhaseUI()
+    const left = S.groupMatches.filter(m => !m.played).length
+    $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Complete Groups'
+  })
 }
 
 // ── Skip functions ────────────────────────────────────────────
@@ -140,11 +148,13 @@ function playNextKO() {
     else { updatePhaseUI(); renderBracket(); toast(`${S.knockoutRounds[S.knockoutRounds.length-1]?.name} begins!`) }
     return
   }
-  const result = playKnockoutMatch(unplayed[0])
-  showMatchPopup(result, round.name)
-  renderBracket(); updatePhaseUI()
-  const left = round.matches.filter(m => !m.played).length
-  $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Advance Round'
+  const match = unplayed[0]
+  const result = playKnockoutMatch(match)
+  showMatchPopup(result, round.name, () => {
+    renderBracket(); updatePhaseUI()
+    const left = round.matches.filter(m => !m.played).length
+    $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Advance Round'
+  })
 }
 
 window.skipKORound = function() {
@@ -158,43 +168,263 @@ window.skipKORound = function() {
   showSkipSummary(results, `${round.name} Results`)
 }
 
-// ── Match popup ───────────────────────────────────────────────
-function showMatchPopup(r, roundName) {
+// ── Match playback (CL-style) ─────────────────────────────────
+function showMatchPopup(r, roundName, onClose) {
   if (!r) return
-  const { t1,t2,g1,g2,shots1,shots2,corners1,corners2,possession1,possession2,penalties,effects,starRatings,mentalityChanges } = r
-  const r1 = starRatings?.team1 || [], r2 = starRatings?.team2 || []
-  $('match-popup-inner').innerHTML = `
-    <div class="match-result-card">
-      <div style="font-size:10px;color:var(--txt3);font-family:var(--font-head);letter-spacing:.12em;margin-bottom:6px">${roundName.toUpperCase()}</div>
-      <div class="match-teams">
-        <div class="match-team" onclick="openTeamModal('${t1.name}')">${flag(t1.cc)} ${t1.name}</div>
-        <div class="match-score">${g1} – ${g2}${penalties?'<sup style="font-size:10px;color:var(--txt3)"> P</sup>':''}</div>
-        <div class="match-team right" onclick="openTeamModal('${t2.name}')">${t2.name} ${flag(t2.cc)}</div>
-      </div>
-      <div class="match-stats-grid">
-        <span>${shots1}</span><span>Shots</span><span style="text-align:right">${shots2}</span>
-        <span>${corners1}</span><span>Corners</span><span style="text-align:right">${corners2}</span>
-        <span style="color:${possession1>=50?'var(--gold2)':'var(--txt2)'}">${possession1}%</span>
-        <span>Possession</span>
-        <span style="text-align:right;color:${possession2>=50?'var(--gold2)':'var(--txt2)'}">${possession2}%</span>
-      </div>
-      ${r1.length||r2.length?`<div class="star-ratings-row">
-        <div class="star-ratings-side">
-          ${r1.map(sr=>`<div class="sr-item"><span class="sr-pos">${sr.pos}</span><span class="sr-val ${ratingClass(sr.rating)}">${sr.rating}</span><span style="font-size:10px;color:var(--txt3)">${sr.name.split(' ')[0]}</span></div>`).join('')}
+  const popup = $('match-popup'), inner = $('match-popup-inner')
+  popup.classList.add('match-popup-modal')
+  popup.style.display = 'flex'
+  _playbackSkip = false
+  if (_playbackTimer) { clearTimeout(_playbackTimer); _playbackTimer = null }
+
+  const t1 = r.t1, t2 = r.t2
+  const stars1 = t1.stars || [], stars2 = t2.stars || []
+
+  function renderFrame(minute, score1, score2, events, finished) {
+    const skipBtn  = finished ? '' : `<button class="btn btn-sm" onclick="window.skipPlayback()">Skip ⏭</button>`
+    const closeBtn = finished ? `<button class="btn btn-primary" onclick="window.closePlayback()">Continue ▶</button>` : ''
+    inner.innerHTML = `
+      <div class="playback-card">
+        <div class="playback-header">
+          <div class="playback-round">${roundName.toUpperCase()}</div>
+          <div class="playback-clock ${finished?'final':''}">${finished?'FT':minute+"'"}</div>
         </div>
-        <div style="font-size:9px;color:var(--txt3);writing-mode:vertical-lr;text-align:center;letter-spacing:.1em;padding:0 4px">STARS</div>
-        <div class="star-ratings-side" style="align-items:flex-end">
-          ${r2.map(sr=>`<div class="sr-item"><span style="font-size:10px;color:var(--txt3)">${sr.name.split(' ')[0]}</span><span class="sr-val ${ratingClass(sr.rating)}">${sr.rating}</span><span class="sr-pos" style="text-align:right">${sr.pos}</span></div>`).join('')}
+        <div class="playback-score-row">
+          <div class="playback-team-block">
+            <div class="playback-team-stripe"></div>
+            <div class="playback-team-inner">
+              <div class="playback-team-name">${flag(t1.cc)} ${t1.name}</div>
+              ${stars1.map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
+              ${t1.soul?`<div style="font-size:10px;color:var(--txt3);margin-top:2px">🎭 ${t1.soul.name}</div>`:''}
+            </div>
+          </div>
+          <div class="playback-score">
+            <span class="${score1>score2?'lead':''}">${score1}</span>
+            <span class="dash">–</span>
+            <span class="${score2>score1?'lead':''}">${score2}</span>
+          </div>
+          <div class="playback-team-block right">
+            <div class="playback-team-inner">
+              <div class="playback-team-name">${t2.name} ${flag(t2.cc)}</div>
+              ${stars2.map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
+              ${t2.soul?`<div style="font-size:10px;color:var(--txt3);margin-top:2px;text-align:right">🎭 ${t2.soul.name}</div>`:''}
+            </div>
+            <div class="playback-team-stripe"></div>
+          </div>
         </div>
-      </div>`:''}
-      ${effects?.length?`<div style="margin-top:6px;border-top:1px solid var(--bg4);padding-top:6px">${effects.map(e=>`<div class="match-effect ${e.includes('⭐')?'star':''}">${e}</div>`).join('')}</div>`:''}
-      ${mentalityChanges?`<div style="font-size:10px;color:var(--txt3);margin-top:4px">
-        ${mentalityChanges.team1.change!==0?`${t1.name} morale ${mentalityChanges.team1.change>0?'↑':'↓'}${Math.abs(mentalityChanges.team1.change)} · `:''} 
-        ${mentalityChanges.team2.change!==0?`${t2.name} morale ${mentalityChanges.team2.change>0?'↑':'↓'}${Math.abs(mentalityChanges.team2.change)}`:''}
-      </div>`:''}
+        <div class="playback-progress-wrap"><div class="playback-progress" style="width:${Math.min(100,(minute/90)*100)}%"></div></div>
+        <div class="playback-events">
+          ${events.length===0
+            ? `<div class="playback-event muted">${finished?'No goals.':'Kick off…'}</div>`
+            : events.map(ev=>`<div class="playback-event ${ev.team===1?'left':'right'} ${ev.isStar?'star':''}">
+                <span class="event-min">${ev.minute}'</span>
+                <span class="event-icon">⚽</span>
+                <span class="event-name">${ev.scorerName}</span>
+              </div>`).join('')}
+        </div>
+        ${finished ? renderFinalSummary(r) : ''}
+        <div class="playback-actions">${skipBtn}${closeBtn}</div>
+      </div>`
+  }
+
+  renderFrame(0, 0, 0, [], false)
+
+  const tranches = r.tranches || []
+  const events = []
+  let i = 0
+
+  function nextStep() {
+    if (_playbackSkip) { finishPlayback(); return }
+    if (i >= tranches.length) { finishPlayback(); return }
+    const tr = tranches[i]
+    ;(tr.newGoals || []).forEach(g => events.push(g))
+    renderFrame(tr.minute, tr.score1, tr.score2, events, false)
+    i++
+    _playbackTimer = setTimeout(nextStep, 900)
+  }
+
+  function finishPlayback() {
+    if (_playbackTimer) { clearTimeout(_playbackTimer); _playbackTimer = null }
+    renderFrame(90, r.g1, r.g2, r.timeline || [], true)
+    window._matchOnClose = onClose
+  }
+
+  _playbackTimer = setTimeout(nextStep, 600)
+}
+
+function renderFinalSummary(r) {
+  const sr1 = r.starRatings?.team1 || [], sr2 = r.starRatings?.team2 || []
+  const ratingClass = v => !v?'':v>=8.5?'rating-gold':v>=7.5?'rating-green':v>=6.0?'rating-white':'rating-red'
+  const starGoals1 = {}, starGoals2 = {}
+  ;(r.timeline||[]).forEach(g => { if (!g.isStar) return; const m=g.team===1?starGoals1:starGoals2; m[g.scorerName]=(m[g.scorerName]||0)+1 })
+
+  const starsBlock = (label, srList, goalsMap) => !srList.length?'':`
+    <div class="playback-team-block">
+      <div class="playback-block-label">${label}</div>
+      ${srList.map(s=>`<div class="playback-star-row" style="color:${tierColor(s.tier)}">
+        <span class="star-name">⭐ ${s.name}</span>
+        <span class="muted">${s.pos}${(goalsMap[s.name]||0)>0?` · ${goalsMap[s.name]}⚽`:''}</span>
+        <span class="rating-val ${ratingClass(s.rating)}">${s.rating?.toFixed(1)||'—'}</span>
+      </div>`).join('')}
     </div>`
-  const popup = $('match-popup'); popup.style.display='block'
-  clearTimeout(popup._t); popup._t = setTimeout(() => popup.style.display='none', 6000)
+
+  return `
+    <div class="playback-stats-grid">
+      <div class="stat-cell stat-team-l">${r.t1.name}</div><div class="stat-cell stat-label">SHOTS</div><div class="stat-cell stat-team-r">${r.t2.name}</div>
+      <div class="stat-cell stat-num">${r.shots1}</div><div class="stat-cell"></div><div class="stat-cell stat-num">${r.shots2}</div>
+      <div class="stat-cell stat-num">${r.corners1}</div><div class="stat-cell stat-label">CORNERS</div><div class="stat-cell stat-num">${r.corners2}</div>
+      <div class="stat-cell stat-num">${r.possession1}%</div><div class="stat-cell stat-label">POSS</div><div class="stat-cell stat-num">${r.possession2}%</div>
+    </div>
+    <div class="playback-pair">
+      ${starsBlock('STARS — '+r.t1.name.toUpperCase(), sr1, starGoals1)}
+      ${starsBlock('STARS — '+r.t2.name.toUpperCase(), sr2, starGoals2)}
+    </div>
+    ${r.effects?.length?`<div class="playback-effects">${r.effects.map(e=>`<div class="effect-line ${e.includes('⭐')?'star':''}">${e}</div>`).join('')}</div>`:''}
+    ${r.mentalityChanges?`<div style="font-size:10px;color:var(--txt3);padding:4px 0;text-align:center">
+      Morale: ${r.t1.name} ${r.mentalityChanges.team1.change>0?'▲':'▼'}${Math.abs(r.mentalityChanges.team1.change)} · ${r.t2.name} ${r.mentalityChanges.team2.change>0?'▲':'▼'}${Math.abs(r.mentalityChanges.team2.change)}
+    </div>`:''}
+  `
+}
+
+window.skipPlayback  = () => { _playbackSkip = true }
+window.closePlayback = () => {
+  const popup = $('match-popup')
+  popup.style.display='none'; popup.classList.remove('match-popup-modal')
+  if (_playbackTimer) { clearTimeout(_playbackTimer); _playbackTimer=null }
+  if (window._matchOnClose) { const cb=window._matchOnClose; window._matchOnClose=null; cb() }
+}
+
+// ── TOURNAMENT tab ────────────────────────────────────────────
+let tourneySubTab = 'qualifying'
+
+function renderTournament() {
+  const el = $('tab-tournament'); if (!el) return
+  const sub = tourneySubTab
+
+  const subTabs = [
+    { id:'qualifying', label:'🌍 Qualifying' },
+    { id:'team-stats', label:'📊 Team Stats' },
+    { id:'player-stats', label:'⭐ Player Stats' },
+  ]
+
+  let html = `<div class="sub-tab-row">
+    ${subTabs.map(t=>`<button class="sub-tab ${sub===t.id?'active':''}" onclick="setTourneyTab('${t.id}')">${t.label}</button>`).join('')}
+  </div>`
+
+  if (sub === 'qualifying') html += renderQualifying()
+  else if (sub === 'team-stats') html += renderTeamStats()
+  else if (sub === 'player-stats') html += renderPlayerStats()
+
+  el.innerHTML = html
+}
+window.setTourneyTab = t => { tourneySubTab=t; renderTournament() }
+
+function renderQualifying() {
+  if (!S.teams?.length) return '<div class="empty">No teams qualified yet</div>'
+  const qualified = new Set(S.teams.map(t=>t.name))
+  const byConf = {}
+  ALL_NATIONS.forEach(n => {
+    if (!byConf[n.conf]) byConf[n.conf] = { qualified:[], notQualified:[] }
+    if (qualified.has(n.name)) byConf[n.conf].qualified.push(n)
+    else byConf[n.conf].notQualified.push(n)
+  })
+  return `<div class="qualify-grid">
+    ${Object.entries(byConf).map(([conf,{qualified:q,notQualified:nq}])=>`
+      <div class="qualify-card">
+        <div class="qualify-card-head">
+          <div class="qualify-league">${conf}</div>
+          <div class="qualify-slots">${q.length} qualified</div>
+        </div>
+        <div class="qualify-body">
+          ${q.map(n=>{
+            const t=S.teams.find(t=>t.name===n.name)
+            const soul=getSoul(n.name)
+            return`<div class="qualify-row qualifies" onclick="openTeamModal('${n.name}')" style="cursor:pointer">
+              <div class="qualify-rank">✓</div>
+              <div class="qualify-name">${flag(n.cc)} ${n.name}${n.name===S.hostNation?' 🏠':''}</div>
+              <div class="qualify-score" style="color:var(--txt3);font-size:10px">${soul.name}</div>
+            </div>`}).join('')}
+          ${nq.map(n=>`<div class="qualify-row">
+            <div class="qualify-rank">✗</div>
+            <div class="qualify-name" style="opacity:.45">${flag(n.cc)} ${n.name}</div>
+            <div class="qualify-score"></div>
+          </div>`).join('')}
+        </div>
+      </div>`).join('')}
+  </div>`
+}
+
+function renderTeamStats() {
+  if (!S.teams?.length) return '<div class="empty">Tournament not started</div>'
+  const teams = [...S.teams]
+  const goals    = (t) => S.teamGoals?.[t.name] || 0
+  const conceded = (t) => S.teamGoalsConceded?.[t.name] || 0
+  const matches  = (t) => (t.w||0)+(t.d||0)+(t.l||0)
+
+  const makeTable = (sorted, statFn, label, color='var(--gold)', asc=false) => `
+    <div class="cl-stat-card card">
+      <div class="cl-stat-title">${label}</div>
+      <table class="data-table compact"><tbody>
+        ${sorted.map((t,i)=>`<tr>
+          <td style="color:var(--txt3);width:20px">${i+1}</td>
+          <td class="c-name" onclick="openTeamModal('${t.name}')">${flag(t.cc)} <strong>${t.name}</strong></td>
+          <td style="color:${color};font-family:var(--font-head);font-weight:700;text-align:right">${statFn(t)}</td>
+        </tr>`).join('')}
+      </tbody></table>
+    </div>`
+
+  const byGoals      = [...teams].sort((a,b)=>goals(b)-goals(a)).slice(0,8)
+  const byConceded   = [...teams].sort((a,b)=>conceded(a)-conceded(b)).slice(0,8)
+  const byGD         = [...teams].sort((a,b)=>((goals(b)-conceded(b))-(goals(a)-conceded(a)))).slice(0,8)
+  const byShots      = [...teams].sort((a,b)=>(b.totalShots||0)-(a.totalShots||0)).slice(0,8)
+  const byPoss       = [...teams].sort((a,b)=>(b.avgPoss||0)-(a.avgPoss||0)).slice(0,8)
+  const byWin        = [...teams].sort((a,b)=>(b.w||0)-(a.w||0)).slice(0,8)
+
+  return `<div class="cl-stats-grid">
+    ${makeTable(byGoals, t=>`${goals(t)} ⚽`, 'Most Goals Scored')}
+    ${makeTable(byConceded, t=>`${conceded(t)} 🥅`, 'Fewest Goals Conceded', 'var(--green)')}
+    ${makeTable(byGD, t=>`${goals(t)-conceded(t)>0?'+':''}${goals(t)-conceded(t)}`, 'Best Goal Difference')}
+    ${makeTable(byWin, t=>`${t.w||0}W ${t.d||0}D ${t.l||0}L`, 'Most Wins')}
+  </div>`
+}
+
+function renderPlayerStats() {
+  // Collect all active stars
+  const allStars = []
+  ;(S.teams||[]).forEach(t => (t.stars||[]).forEach(s => allStars.push({...s, teamName:t.name, cc:t.cc})))
+  if (!allStars.length) return '<div class="empty">No stars in this tournament</div>'
+
+  const topScorers = [...allStars].filter(s=>s.goals>0).sort((a,b)=>(b.goals||0)-(a.goals||0)).slice(0,10)
+  const avgRating = s => s.ratings?.length ? s.ratings.reduce((a,b)=>a+b,0)/s.ratings.length : 0
+  const offMVPs = [...allStars].filter(s=>['FWD','MID'].includes(s.pos)&&s.ratings?.length).sort((a,b)=>avgRating(b)-avgRating(a)).slice(0,8)
+  const defMVPs = [...allStars].filter(s=>['DEF','GK'].includes(s.pos)&&s.ratings?.length).sort((a,b)=>avgRating(b)-avgRating(a)).slice(0,8)
+
+  const playerRow = (s, stat, color='var(--gold)') => `<tr>
+    <td class="c-name" onclick="openStarModal('${s.id}','${s.teamName}')">${flag(s.cc||'')} <strong>${s.name}</strong> <span style="font-size:10px;color:var(--txt3)">(${s.teamName})</span></td>
+    <td style="color:var(--txt3);font-size:10px">${s.pos}</td>
+    <td style="color:${color};font-family:var(--font-head);font-weight:700;text-align:right">${stat}</td>
+  </tr>`
+
+  return `<div class="cl-stats-grid">
+    <div class="cl-stat-card card">
+      <div class="cl-stat-title">⚽ Top Scorers</div>
+      <table class="data-table compact"><tbody>
+        ${topScorers.map(s=>playerRow(s, `${s.goals} ⚽`)).join('')}
+      </tbody></table>
+    </div>
+    <div class="cl-stat-card card">
+      <div class="cl-stat-title">🌟 Offensive MVP (FWD/MID)</div>
+      <table class="data-table compact"><tbody>
+        ${offMVPs.map(s=>playerRow(s, avgRating(s).toFixed(1)+' ★', 'var(--gold2)')).join('')}
+      </tbody></table>
+    </div>
+    <div class="cl-stat-card card">
+      <div class="cl-stat-title">🛡️ Defensive MVP (DEF/GK)</div>
+      <table class="data-table compact"><tbody>
+        ${defMVPs.map(s=>playerRow(s, avgRating(s).toFixed(1)+' ★', 'var(--blue)')).join('')}
+      </tbody></table>
+    </div>
+  </div>`
 }
 
 // ── PLAY tab ──────────────────────────────────────────────────
@@ -486,7 +716,14 @@ window.openTeamModal = function(teamName) {
       ${semis?`<div style="text-align:center"><div style="font-size:26px">🏅</div><div style="font-family:var(--font-head);font-size:22px">${semis}</div><div style="font-size:10px;color:var(--txt3)">SEMIS</div></div>`:''}
     </div>`:'<div style="font-size:12px;color:var(--txt3);margin-bottom:10px">No WC history yet</div>'}
 
-    <div class="sec">STATS (effective incl. star bonuses)</div>
+    ${t.soul || getSoul(t.name) ? `
+    <div class="sec">NATIONAL SOUL</div>
+    <div class="card" style="border-left:3px solid var(--gold3)">
+      <div style="font-weight:700;font-size:14px;color:var(--gold2)">${(t.soul || getSoul(t.name)).name}</div>
+      <div style="font-size:12px;color:var(--txt2);margin-top:3px">${(t.soul || getSoul(t.name)).desc}</div>
+    </div>`:''}
+
+    <div class="sec">STATS (effective incl. star bonuses + soul)</div>
     ${Object.entries(statNames).map(([k,label])=>{
       const bv=base[k]||75, ev=eff[k]||75, bonus=ev-bv
       return`<div class="stat-row">

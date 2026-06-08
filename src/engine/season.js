@@ -1,5 +1,5 @@
 import { S, autoSave } from '../store.js'
-import { ALL_NATIONS, CONF_SLOTS, flag } from '../data/nations.js'
+import { ALL_NATIONS, CONF_SLOTS, flag, getSoul } from '../data/nations.js'
 import { simMatch, rand, clamp, shuffle, ovr, getEffStats, STAR_MULT, STAR_BONUSES } from './match.js'
 import { initAllStars, ageAllStars, linkStarsToTeam, syncStarsBack, TIER_ORDER } from './stars.js'
 
@@ -83,6 +83,7 @@ export function runQualification() {
       stats: nation.stats || rollStats(nation.tier || 'rest'),
       rating,
       stars: linkStarsToTeam(nation),
+      soul: getSoul(nation.name),
       isHost: nation.name === S.hostNation,
       mentalityDelta: 0,
       w:0, d:0, l:0, gf:0, ga:0, pts:0,
@@ -165,6 +166,10 @@ function trackStats(r, phase, gi) {
   S.teamGoalsConceded[r.t1.name] = (S.teamGoalsConceded[r.t1.name]||0) + r.g2
   S.teamGoalsConceded[r.t2.name] = (S.teamGoalsConceded[r.t2.name]||0) + r.g1
   ;[r.t1, r.t2].forEach(t => (t.stars||[]).forEach(s => { if (s.goals) S.scorers[s.name]=(S.scorers[s.name]||0)+s.goals }))
+  // Track shots and possession per team for Tournament stats
+  const m1 = S.teams?.find(t=>t.name===r.t1.name), m2 = S.teams?.find(t=>t.name===r.t2.name)
+  if (m1) { m1.totalShots=(m1.totalShots||0)+(r.shots1||0); m1.avgPoss=((m1.avgPoss||0)+r.possession1)/((m1.matchCount||0)+1); m1.matchCount=(m1.matchCount||0)+1 }
+  if (m2) { m2.totalShots=(m2.totalShots||0)+(r.shots2||0); m2.avgPoss=((m2.avgPoss||0)+r.possession2)/((m2.matchCount||0)+1); m2.matchCount=(m2.matchCount||0)+1 }
 }
 
 export function groupStandings(grp) {
