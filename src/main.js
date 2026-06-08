@@ -81,63 +81,25 @@ window.handleMain = async function() {
   }
 }
 
-// ── Group play ────────────────────────────────────────────────
+// ── Pre-match preview then play ───────────────────────────────
 function playNextGroup() {
   const unplayed = S.groupMatches.filter(m => !m.played)
   if (!unplayed.length) {
-    buildKnockout()
-    S.phase = 'knockout'
+    buildKnockout(); S.phase = 'knockout'
     autoSave(); updatePhaseUI(); switchTab('bracket')
     toast('Group stage done — Round of 32!'); return
   }
   const match = unplayed[0]
-  const result = playGroupMatch(match)
-  showMatchPopup(result, 'Group Stage', () => {
-    renderGroups(); updatePhaseUI()
-    const left = S.groupMatches.filter(m => !m.played).length
-    $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Complete Groups'
+  showMatchPreview(match.t1, match.t2, 'Group Stage', () => {
+    const result = playGroupMatch(match)
+    showMatchPopup(result, 'Group Stage', () => {
+      renderGroups(); updatePhaseUI()
+      const left = S.groupMatches.filter(m => !m.played).length
+      $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Complete Groups'
+    })
   })
 }
 
-// ── Skip functions ────────────────────────────────────────────
-window.skipGroup = function(gi) {
-  const unplayed = S.groupMatches.filter(m => !m.played && m.gi === gi)
-  const results = []
-  unplayed.forEach(m => { const r = playGroupMatch(m); if (r) results.push(r) })
-  renderGroups()
-  showSkipSummary(results, `Group ${S.groups[gi]?.id || gi} Results`)
-}
-
-window.skipAllGroups = function() {
-  const unplayed = S.groupMatches.filter(m => !m.played)
-  const results = []
-  unplayed.forEach(m => { const r = playGroupMatch(m); if (r) results.push(r) })
-  if (!S.groupMatches.filter(m=>!m.played).length) {
-    buildKnockout(); S.phase='knockout'; autoSave()
-  }
-  updatePhaseUI(); renderGroups()
-  showSkipSummary(results, 'All Group Results')
-}
-
-function showSkipSummary(results, title) {
-  if (!results.length) return
-  $('skip-content').innerHTML = `
-    <div class="row" style="margin-bottom:12px">
-      <div class="sec" style="margin:0">${title}</div>
-      <button class="btn btn-icon" onclick="closeSkip()" style="margin-left:auto">✕</button>
-    </div>
-    ${results.map(r => `
-      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bg4)">
-        <div style="font-size:12px;text-align:right">${flag(r.t1?.cc)} ${r.t1?.name}</div>
-        <div style="font-family:var(--font-head);font-size:18px;color:var(--gold2);text-align:center">${r.g1}–${r.g2}</div>
-        <div style="font-size:12px">${r.t2?.name} ${flag(r.t2?.cc)}</div>
-      </div>`).join('')}
-  `
-  $('skip-overlay').style.display = 'flex'
-}
-window.closeSkip = () => { $('skip-overlay').style.display='none' }
-
-// ── Knockout play ─────────────────────────────────────────────
 function playNextKO() {
   const round = S.knockoutRounds[S.knockoutRounds.length - 1]
   if (!round) return
@@ -149,23 +111,235 @@ function playNextKO() {
     return
   }
   const match = unplayed[0]
-  const result = playKnockoutMatch(match)
-  showMatchPopup(result, round.name, () => {
-    renderBracket(); updatePhaseUI()
-    const left = round.matches.filter(m => !m.played).length
-    $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Advance Round'
+  showMatchPreview(match.t1, match.t2, round.name, () => {
+    const result = playKnockoutMatch(match)
+    showMatchPopup(result, round.name, () => {
+      renderBracket(); updatePhaseUI()
+      const left = round.matches.filter(m => !m.played).length
+      $('btn-main').textContent = left > 0 ? `▶ Play Next (${left} left)` : '▶ Advance Round'
+    })
   })
+}
+
+// ── Pre-match preview screen ──────────────────────────────────
+function showMatchPreview(t1, t2, roundName, onStart) {
+  const popup = $('match-popup'), inner = $('match-popup-inner')
+  popup.classList.add('match-popup-modal')
+  popup.style.display = 'flex'
+
+  const teamBlock = (team, side) => {
+    const stars = team.stars || []
+    const e = getEffStats(team, false)
+    const o = Math.round((e.attack+e.defense+e.stamina+e.mental+e.setPieces)/5)
+    const games = (team.w||0)+(team.d||0)+(team.l||0)
+    const soul = team.soul || getSoul(team.name)
+    return `
+      <div class="preview-team ${side}">
+        <div class="preview-team-head">
+          <span class="preview-team-flag">${flag(team.cc)}</span>
+          <span class="preview-team-name">${team.name}</span>
+          <span class="preview-team-ovr">OVR ${o}</span>
+        </div>
+        <div class="preview-stat-grid">
+          <div><span class="preview-stat-label">ATT</span><span>${e.attack}</span></div>
+          <div><span class="preview-stat-label">DEF</span><span>${e.defense}</span></div>
+          <div><span class="preview-stat-label">STA</span><span>${e.stamina}</span></div>
+          <div><span class="preview-stat-label">MEN</span><span>${e.mental}</span></div>
+          <div><span class="preview-stat-label">SET</span><span>${e.setPieces}</span></div>
+        </div>
+        <div class="preview-form-row">
+          <div><span class="preview-stat-label">G</span>${games}</div>
+          <div><span class="preview-stat-label">W</span><span style="color:var(--green)">${team.w||0}</span></div>
+          <div><span class="preview-stat-label">D</span>${team.d||0}</div>
+          <div><span class="preview-stat-label">L</span><span style="color:var(--red)">${team.l||0}</span></div>
+          <div><span class="preview-stat-label">GF</span>${team.gf||0}</div>
+          <div><span class="preview-stat-label">GA</span>${team.ga||0}</div>
+        </div>
+        ${soul ? `<div class="preview-section-label">SOUL</div>
+          <div class="preview-soul-row">
+            <span class="preview-soul-name">🎭 ${soul.name}</span>
+            <span class="preview-soul-desc">${soul.desc}</span>
+          </div>` : ''}
+        <div class="preview-section-label">STARS (${stars.length})</div>
+        ${stars.length ? stars.map(s => `
+          <div class="preview-star-row" style="color:${tierColor(s.tier)}">
+            <span class="badge badge-${s.tier}">${s.pos}</span>
+            <span class="preview-star-name">${s.name}</span>
+            <span class="muted" style="font-size:10px">${TIER_LABELS[s.tier]||s.tier}</span>
+          </div>`).join('') : '<div class="muted" style="font-size:11px">No stars</div>'}
+        ${team.mentalityDelta ? `<div style="font-size:11px;margin-top:6px;color:${team.mentalityDelta>0?'var(--green)':'var(--red)'}">Morale ${team.mentalityDelta>0?'▲':'▼'}${Math.abs(team.mentalityDelta)}</div>` : ''}
+      </div>`
+  }
+
+  const isGroup = S.phase === 'groups'
+  const nextMatch = isGroup ? S.groupMatches.find(m => !m.played) : null
+  const groupLeft = nextMatch ? S.groupMatches.filter(m => !m.played && m.gi === nextMatch.gi).length : 0
+
+  const skipButtons = isGroup
+    ? `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip Game ⏭</button>
+       <button class="btn btn-secondary" onclick="window.skipPreviewedGroup()">Skip Group ⏭⏭ (${groupLeft})</button>`
+    : `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip Game ⏭</button>`
+
+  inner.innerHTML = `
+    <div class="playback-card preview-card">
+      <div class="playback-header">
+        <div class="playback-round">${roundName.toUpperCase()} — PREVIEW</div>
+        <button class="btn btn-icon btn-sm" onclick="window.cancelPreview()" style="font-size:14px">✕</button>
+      </div>
+      <div class="preview-grid">
+        ${teamBlock(t1, 'left')}
+        <div class="preview-vs">VS</div>
+        ${teamBlock(t2, 'right')}
+      </div>
+      <div class="playback-actions" style="flex-wrap:wrap;gap:8px">
+        ${skipButtons}
+        <button class="btn btn-primary" onclick="window.startPreviewedMatch()">▶ Simulate</button>
+      </div>
+    </div>`
+
+  window._previewOnStart = onStart
+}
+
+window.startPreviewedMatch = function() {
+  const cb = window._previewOnStart
+  window._previewOnStart = null
+  if (cb) cb()
+}
+
+window.cancelPreview = function() {
+  window._previewOnStart = null
+  const popup = $('match-popup')
+  popup.style.display = 'none'
+  popup.classList.remove('match-popup-modal')
+}
+
+window.skipPreviewedMatch = function() {
+  window._previewOnStart = null
+  $('match-popup').style.display = 'none'
+  if (S.phase === 'groups') {
+    const match = S.groupMatches.find(m => !m.played)
+    if (!match) return
+    const result = playGroupMatch(match)
+    showGroupResultsPopup([result], 'Group Stage', () => { renderGroups(); updatePhaseUI() })
+  } else if (S.phase === 'knockout') {
+    const round = S.knockoutRounds[S.knockoutRounds.length-1]
+    const match = round?.matches.find(m => !m.played)
+    if (!match) return
+    const result = playKnockoutMatch(match)
+    showGroupResultsPopup([result], round.name, () => { renderBracket(); updatePhaseUI() })
+  }
+}
+
+window.skipPreviewedGroup = function() {
+  window._previewOnStart = null
+  $('match-popup').style.display = 'none'
+  if (S.phase !== 'groups') return
+  const nextMatch = S.groupMatches.find(m => !m.played)
+  if (!nextMatch) return
+  const gi = nextMatch.gi
+  const results = S.groupMatches.filter(m => !m.played && m.gi === gi).map(m => playGroupMatch(m))
+  showGroupResultsPopup(results, `Group ${S.groups[gi]?.id || ''}`, () => { renderGroups(); updatePhaseUI() })
+}
+
+// ── Skip All Groups (from home tab) ──────────────────────────
+window.skipAllGroups = function() {
+  const unplayed = S.groupMatches.filter(m => !m.played)
+  const results = unplayed.map(m => playGroupMatch(m))
+  if (!S.groupMatches.filter(m=>!m.played).length) {
+    buildKnockout(); S.phase='knockout'; autoSave()
+  }
+  updatePhaseUI(); renderGroups()
+  showGroupResultsPopup(results, 'All Group Results', () => {})
+}
+
+window.skipGroup = function(gi) {
+  const results = S.groupMatches.filter(m => !m.played && m.gi === gi).map(m => playGroupMatch(m))
+  renderGroups()
+  showGroupResultsPopup(results, `Group ${S.groups[gi]?.id || gi} Results`, () => {})
 }
 
 window.skipKORound = function() {
   const round = S.knockoutRounds[S.knockoutRounds.length-1]
   if (!round) return
-  const unplayed = round.matches.filter(m=>!m.played)
-  const results=[]
-  unplayed.forEach(m=>{ const r=playKnockoutMatch(m); if(r) results.push(r) })
+  const results = round.matches.filter(m=>!m.played).map(m => playKnockoutMatch(m))
   advanceKnockout(); autoSave()
   updatePhaseUI(); renderBracket()
-  showSkipSummary(results, `${round.name} Results`)
+  showGroupResultsPopup(results, `${round.name} Results`, () => {})
+}
+
+// ── Multi-match results popup (tabbed) ───────────────────────
+function showGroupResultsPopup(results, roundName, onClose) {
+  const popup = $('match-popup'), inner = $('match-popup-inner')
+  popup.classList.add('match-popup-modal')
+  popup.style.display = 'flex'
+  let selected = 0
+
+  const render = () => {
+    const r = results[selected]
+    const tabs = results.length > 1 ? results.map((res, i) => `
+      <div class="group-result-tab ${i===selected?'active':''}" onclick="window._selectGroupResult(${i})">
+        <div class="group-result-tab-num">M${i+1}</div>
+        <div class="group-result-tab-score">${res.g1}–${res.g2}</div>
+        <div class="group-result-tab-winner">${(res.g1>res.g2?res.t1:res.g2>res.g1?res.t2:null)?.name?.slice(0,12)||'Draw'}</div>
+      </div>`).join('') : ''
+
+    const events = (r.timeline||[])
+    inner.innerHTML = `
+      <div class="group-results-wrap">
+        ${results.length>1?`<div class="group-results-tabs">${tabs}</div>`:''}
+        <div class="group-results-detail">
+          <div class="playback-card group-result-card-inner">
+            <div class="playback-header">
+              <div class="playback-round">${roundName.toUpperCase()}${results.length>1?` · M${selected+1}/${results.length}`:''}</div>
+              <div class="playback-clock final">FT</div>
+            </div>
+            <div class="playback-score-row">
+              <div class="playback-team-block">
+                <div class="playback-team-stripe"></div>
+                <div class="playback-team-inner">
+                  <div class="playback-team-name">${flag(r.t1.cc)} ${r.t1.name}</div>
+                  ${(r.t1.stars||[]).map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
+                </div>
+              </div>
+              <div class="playback-score">
+                <span class="${r.g1>r.g2?'lead':''}">${r.g1}</span>
+                <span class="dash">–</span>
+                <span class="${r.g2>r.g1?'lead':''}">${r.g2}</span>
+              </div>
+              <div class="playback-team-block right">
+                <div class="playback-team-inner">
+                  <div class="playback-team-name">${r.t2.name} ${flag(r.t2.cc)}</div>
+                  ${(r.t2.stars||[]).map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
+                </div>
+                <div class="playback-team-stripe"></div>
+              </div>
+            </div>
+            <div class="playback-events">
+              ${events.length===0?'<div class="playback-event muted">No goals.</div>':
+                events.map(ev=>`<div class="playback-event ${ev.team===1?'left':'right'} ${ev.isStar?'star':''}">
+                  <span class="event-min">${ev.minute}'</span>
+                  <span class="event-icon">⚽</span>
+                  <span class="event-name">${ev.scorerName}</span>
+                </div>`).join('')}
+            </div>
+            ${renderFinalSummary(r)}
+          </div>
+          <div class="playback-actions" style="margin-top:8px">
+            <button class="btn btn-primary" onclick="window._closeGroupResults()">Continue ▶</button>
+          </div>
+        </div>
+      </div>`
+  }
+
+  window._selectGroupResult = i => { selected=i; render() }
+  window._closeGroupResults = () => {
+    popup.style.display='none'
+    popup.classList.remove('match-popup-modal')
+    window._selectGroupResult = null
+    window._closeGroupResults = null
+    if (onClose) onClose()
+  }
+  render()
 }
 
 // ── Match playback (CL-style) ─────────────────────────────────
