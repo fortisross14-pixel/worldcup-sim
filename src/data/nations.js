@@ -120,39 +120,21 @@ export const CONF_SLOTS = {
   UEFA: 16, CONMEBOL: 6, CONCACAF: 6, CAF: 9, AFC: 8, OFC: 1, HOST: 1, PLAYOFF: 1
 }
 
-// Flag emoji via unicode regional indicators
-export function flag(cc) {
-  if (!cc) return '🏳️'
-  const special = {
-    'gb-eng': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-    'gb-sct': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
-    'gb-wls': '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+// Flag as <img> from flagcdn.com — reliable on all mobile browsers
+// cc can be ISO 3166-1 alpha-2 or special code
+export function flag(cc, size) {
+  if (!cc) return '<img src="" style="width:20px;height:15px;background:#333;border-radius:2px;display:inline-block">'
+  const s = size || 20
+  const h = Math.round(s * 0.75)
+  const ccMap = {
+    'gb-eng': 'gb-eng', 'gb-sct': 'gb-sct', 'gb-wls': 'gb-wls', 'xk': 'xk',
   }
-  if (special[cc]) return special[cc]
-  return cc.toUpperCase().split('').map(c => String.fromCodePoint(0x1F1E0 + c.charCodeAt(0) - 65)).join('')
+  const code = (ccMap[cc] || cc).toLowerCase()
+  return '<img src="https://flagcdn.com/' + s + 'x' + h + '/' + code + '.png" width="' + s + '" height="' + h + '" alt="' + cc + '" style="border-radius:2px;vertical-align:middle;display:inline-block;flex-shrink:0" onerror="this.style.visibility=\'hidden\'">'
 }
 
-// Player name pools by nation
-const NAMES = {
-  de: { f:['Thomas','Kai','Leroy','Joshua','Leon','Niklas','Toni','Jamal','Florian','Julian'], l:['Müller','Havertz','Sané','Kimmich','Goretzka','Süle','Kroos','Musiala','Wirtz','Brandt'] },
-  it: { f:['Lorenzo','Federico','Marco','Nicolo','Davide','Manuel','Ciro','Gianluca','Luca','Roberto'], l:['Insigne','Chiesa','Verratti','Barella','Tonali','Immobile','Locatelli','Donnarumma','Pellegrini','Bonucci'] },
-  fr: { f:['Kylian','Antoine','Ousmane','Paul','Raphaël','Benjamin','Kingsley','Jules','Aurélien','Christopher'], l:['Mbappé','Griezmann','Dembélé','Pogba','Varane','Pavard','Coman','Koundé','Tchouaméni','Nkunku'] },
-  es: { f:['Sergio','Carlos','Marcos','Pablo','Álvaro','Dani','Nacho','Pedri','Gavi','Ansu'], l:['García','Martínez','Rodríguez','Sánchez','Morata','Carvajal','Alba','Gavi','Pedri','Félix'] },
-  'gb-eng': { f:['Harry','Marcus','Raheem','Jordan','Declan','Mason','Phil','Jack','Bukayo','Jude'], l:['Kane','Rashford','Sterling','Henderson','Rice','Mount','Foden','Grealish','Saka','Bellingham'] },
-  br: { f:['Neymar','Vinicius','Rodrygo','Lucas','Eder','Richarlison','Gabriel','Antony','Raphinha','Fred'], l:['Jr','Jr','Militão','Paquetá','Firmino','Thaisa','Magalhães','Araújo','Guimarães','Santos'] },
-  ar: { f:['Lionel','Angel','Paulo','Rodrigo','Leandro','Nicolas','Alexis','Emiliano','Marcos','Lautaro'], l:['Messi','Di María','Dybala','De Paul','Paredes','Tagliafico','Mac Allister','Martínez','Acuña','Martínez'] },
-  uy: { f:['Luis','Edinson','Diego','Federico','Rodrigo','Darwin','Ronald','Sebastián','Nahitan','Giorgian'], l:['Suárez','Cavani','Godín','Valverde','Bentancur','Núñez','Araújo','Coates','Nández','De Arrascaeta'] },
-  pt: { f:['Cristiano','Bernardo','Bruno','João','Diogo','Rúben','Gonçalo','Raphaël','André','Vitinha'], l:['Ronaldo','Silva','Fernandes','Félix','Jota','Dias','Ramos','Guerreiro','André Silva','Nunes'] },
-  nl: { f:['Virgil','Georginio','Frenkie','Memphis','Matthijs','Cody','Davy','Teun','Xavi','Wout'], l:['van Dijk','Wijnaldum','de Jong','Depay','de Ligt','Gakpo','Klaassen','Koopmeiners','Simons','Weghorst'] },
-  default: { f:['Carlos','Marco','David','Ivan','Stefan','Alexei','Andrei','Mohammed','Hiroshi','Samuel'], l:['García','Rossi','Johnson','Petrov','Kovač','Ivanov','Popescu','Al-Rashid','Tanaka','Osei'] }
-}
+// Names defined in names.js module
 
-export function getPlayerName(cc) {
-  const pool = NAMES[cc] || NAMES.default
-  const f = pool.f[Math.floor(Math.random() * pool.f.length)]
-  const l = pool.l[Math.floor(Math.random() * pool.l.length)]
-  return `${f} ${l}`
-}
 
 // ── Nation Souls ─────────────────────────────────────────────
 // Each nation has a soul that shapes their playing style

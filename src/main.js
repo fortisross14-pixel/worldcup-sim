@@ -1,12 +1,12 @@
 import { S, autoSave, loadGame, clearGame, exportSave, importSave } from './store.js'
-import { getSoul } from './data/nations.js'
-import { ALL_NATIONS, flag } from './data/nations.js'
+import { ALL_NATIONS, flag, getSoul } from './data/nations.js'
 import { initAllStars, ageAllStars, TIER_LABELS, TIER_COLORS, TIER_ORDER } from './engine/stars.js'
 import {
   runQualification, drawGroups, groupStandings, playGroupMatch, buildKnockout,
   playKnockoutMatch, advanceKnockout, startNewWC
 } from './engine/season.js'
 import { getEffStats, ovr } from './engine/match.js'
+import { resetNameTracking } from './data/names.js'
 
 // ── Playback state ────────────────────────────────────────────
 let _playbackTimer = null
@@ -254,7 +254,6 @@ function showMatchPopup(r, roundName, onClose) {
 
 function renderFinalSummary(r) {
   const sr1 = r.starRatings?.team1 || [], sr2 = r.starRatings?.team2 || []
-  const ratingClass = v => !v?'':v>=8.5?'rating-gold':v>=7.5?'rating-green':v>=6.0?'rating-white':'rating-red'
   const starGoals1 = {}, starGoals2 = {}
   ;(r.timeline||[]).forEach(g => { if (!g.isStar) return; const m=g.team===1?starGoals1:starGoals2; m[g.scorerName]=(m[g.scorerName]||0)+1 })
 
@@ -891,6 +890,7 @@ async function init() {
   const loaded = await loadGame()
   if (!loaded) {
     S.wcNumber = 1; S.phase = 'idle'
+    resetNameTracking()
     initAllStars(1)
   } else {
     // Restore stars to ALL_NATIONS from saved S data if possible

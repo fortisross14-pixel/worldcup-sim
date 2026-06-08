@@ -311,3 +311,12 @@ table.data-table .c-name:hover{color:var(--gold2);text-decoration:underline}
 .cl-stat-card.card{margin-bottom:0}
 .cl-stat-title{font-family:var(--font-head);font-size:11px;letter-spacing:.12em;color:var(--txt3);text-transform:uppercase;margin-bottom:7px;padding-bottom:7px;border-bottom:1px solid var(--bg4)}
 table.data-table.compact td{padding:4px 6px;font-size:11px}
+
+/* ── FLAG IMAGES ─────────────────────────────────── */
+img[src*="flagcdn"] {
+  border-radius: 2px;
+  vertical-align: middle;
+  display: inline-block;
+  flex-shrink: 0;
+  object-fit: cover;
+}

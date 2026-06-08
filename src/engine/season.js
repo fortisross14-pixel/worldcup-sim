@@ -2,6 +2,7 @@ import { S, autoSave } from '../store.js'
 import { ALL_NATIONS, CONF_SLOTS, flag, getSoul } from '../data/nations.js'
 import { simMatch, rand, clamp, shuffle, ovr, getEffStats, STAR_MULT, STAR_BONUSES } from './match.js'
 import { initAllStars, ageAllStars, linkStarsToTeam, syncStarsBack, TIER_ORDER } from './stars.js'
+import { resetNameTracking } from '../data/names.js'
 
 // ── Gaussian helper ───────────────────────────────────────────
 function gauss(sig = 3.5, maxAbs = 12) {
@@ -284,6 +285,7 @@ export function startNewWC() {
   S.scorers = {}; S.teamGoals = {}; S.teamGoalsConceded = {}
   S.allMatchResults = []; S.roundReached = {}; S.seasonAwards = {}
   S.teams?.forEach(t => { t.pts=0;t.w=0;t.d=0;t.l=0;t.gf=0;t.ga=0;t.gd=0;t.mentalityDelta=0 })
+  resetNameTracking()  // allow names to be reused across WC cycles
   return ageAllStars(S.wcNumber)  // returns { retiring, debuting }
 }
 

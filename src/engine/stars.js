@@ -1,5 +1,6 @@
-import { ALL_NATIONS, rollStarTier, getPlayerName } from '../data/nations.js'
-import { STAR_BONUSES, rand } from './match.js'
+import { ALL_NATIONS, rollStarTier } from '../data/nations.js'
+import { STAR_BONUSES, GOAL_DIST, SAVE_PROB, rand } from './match.js'
+import { getPlayerName, resetNameTracking } from '../data/names.js'
 
 export const TIER_LABELS = {
   generational:'Generational', legendary:'Legendary', epic:'Epic',
