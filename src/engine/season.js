@@ -3,6 +3,7 @@ import { ALL_NATIONS, CONF_SLOTS, flag, getSoul } from '../data/nations.js'
 import { simMatch, rand, clamp, shuffle, ovr, getEffStats, STAR_MULT, STAR_BONUSES } from './match.js'
 import { initAllStars, ageAllStars, linkStarsToTeam, syncStarsBack, TIER_ORDER } from './stars.js'
 import { resetNameTracking } from '../data/names.js'
+import { addStory, qualifiedStreak, editionsSinceTitle, isLastDance, careerLine } from './storylines.js'
 
 // ── Gaussian helper ───────────────────────────────────────────
 function gauss(sig = 3.5, maxAbs = 12) {
@@ -26,11 +27,22 @@ function histPts(nationName) {
   return ws ? Math.round((ss / (ws * 20)) * 20) : 0
 }
 
-// ── Season rating = base(80%) + hist(20%), then ±7 noise ──────
+// ── Star quality bonus — best star's tier lifts qualification odds ──
+function starQualityBonus(nation) {
+  const stars = nation.stars || []
+  if (!stars.length) return 0
+  const tierPts = { generational:16, legendary:11, epic:7, rare:4, uncommon:2, common:0 }
+  // Sum all three stars but weight the best one most
+  const vals = stars.map(s => tierPts[s.tier] || 0).sort((a,b) => b-a)
+  return (vals[0] || 0) + (vals[1] || 0) * 0.4 + (vals[2] || 0) * 0.2
+}
+
+// ── Season rating = base(80%) + hist + star quality, then ±7 noise ──
 function seasonRating(nation) {
   const hist = histPts(nation.name)
-  const raw = nation.base * 0.80 + hist
-  return clamp(Math.round(raw + gauss(3, 7)), 40, 99)
+  const stars = starQualityBonus(nation)
+  const raw = nation.base * 0.80 + hist + stars
+  return clamp(Math.round(raw + gauss(3, 7)), 40, 120)
 }
 
 // ── Build 5-stat block for a team ────────────────────────────
@@ -96,6 +108,29 @@ export function runQualification() {
   S.teamGoals = {}; S.teamGoalsConceded = {}
   S.allMatchResults = []; S.scorers = {}
   S.seasonAwards = {}
+  S.storylines = []
+
+  // ── Qualification storylines ──
+  const qualSet2 = new Set(S.teams.map(t => t.name))
+  ALL_NATIONS.forEach(n => {
+    const big = n.tier === 'top' || (n.hist || 0) >= 30
+    if (big && !qualSet2.has(n.name)) {
+      const streak = qualifiedStreak(n.name)
+      const total = S.history?.length || 0
+      if (total >= 2 && streak === total) {
+        addStory('💥', `SHOCK: ${n.name} fail to qualify for the first time ever!`)
+      } else if (streak >= 2) {
+        addStory('💥', `${n.name} miss the World Cup after ${streak} straight editions!`)
+      } else {
+        addStory('❌', `${n.name} fail to qualify for World Cup #${S.wcNumber}.`)
+      }
+    }
+    if (n.tier === 'rest' && qualSet2.has(n.name)) {
+      const gem = (n.stars || []).find(st => ['generational','legendary'].includes(st.tier))
+      if (gem) addStory('🌟', `${n.name}, powered by ${gem.tier} ${gem.pos} ${gem.name}, reach the World Cup!`)
+    }
+  })
+  addStory('🏟️', `${S.hostNation} host World Cup #${S.wcNumber}.`)
 }
 
 // ── Draw 12 groups of 4 ───────────────────────────────────────
@@ -172,6 +207,13 @@ function trackStats(r, phase, gi) {
   const m1 = S.teams?.find(t=>t.name===r.t1.name), m2 = S.teams?.find(t=>t.name===r.t2.name)
   if (m1) { m1.totalShots=(m1.totalShots||0)+(r.shots1||0); m1.avgPoss=((m1.avgPoss||0)+r.possession1)/((m1.matchCount||0)+1); m1.matchCount=(m1.matchCount||0)+1 }
   if (m2) { m2.totalShots=(m2.totalShots||0)+(r.shots2||0); m2.avgPoss=((m2.avgPoss||0)+r.possession2)/((m2.matchCount||0)+1); m2.matchCount=(m2.matchCount||0)+1 }
+  // Biggest win record (all-time)
+  const margin = Math.abs(r.g1 - r.g2)
+  S.records = S.records || {}
+  if (margin >= 3 && (!S.records.biggestWin || margin > S.records.biggestWin.margin)) {
+    const w = r.g1 > r.g2
+    S.records.biggestWin = { winner: w?r.t1.name:r.t2.name, loser: w?r.t2.name:r.t1.name, g1: Math.max(r.g1,r.g2), g2: Math.min(r.g1,r.g2), margin, wc: S.wcNumber }
+  }
 }
 
 export function groupStandings(grp) {
@@ -194,6 +236,16 @@ export function buildKnockout() {
   const bestThirds = thirds.slice(0, 8)
   bestThirds.forEach(t => S.roundReached[t.name] = 'Round of 32')
   thirds.slice(8).forEach(t => { if (!S.roundReached[t.name]) S.roundReached[t.name] = 'Group' })
+
+  // ── Group-exit storylines ──
+  S.teams.forEach(t => {
+    if (S.roundReached[t.name] !== 'Group') return
+    if (t.tier === 'top') addStory('💥', `SHOCK: ${t.name} are eliminated in the group stage!`)
+    if (t.isHost) addStory('😢', `Hosts ${t.name} crash out in the groups.`)
+    ;(t.stars || []).forEach(st => {
+      if (isLastDance(st)) addStory('👋', `That was the last dance for ${st.name} (${t.name}) — ${careerLine(st)}. A group-stage farewell.`)
+    })
+  })
 
   // Seed: 32 teams, seed by rating so strong teams are spread out
   const all32 = [...top2, ...bestThirds].sort((a,b) => b.rating - a.rating)
@@ -223,6 +275,14 @@ export function advanceKnockout() {
   }).filter(Boolean)
 
   losers.forEach(t => { if (!S.roundReached[t.name]) S.roundReached[t.name] = round.name })
+
+  // ── Knockout-exit storylines ──
+  losers.forEach(t => {
+    if (t.isHost) addStory('😢', `Hosts ${t.name} are knocked out in the ${round.name}.`)
+    ;(t.stars || []).forEach(st => {
+      if (isLastDance(st)) addStory('👋', `That was the last dance for ${st.name} (${t.name}) — ${careerLine(st)}. Out in the ${round.name}.`)
+    })
+  })
 
   if (winners.length === 1) {
     S.champion = winners[0]
@@ -272,6 +332,29 @@ function finalizeWC() {
     defMVP:    defMVP    ? { name:defMVP.name,    rating:defRating.toFixed(1), team:defMVP.teamName, pos:defMVP.pos, tier:defMVP.tier } : null,
   }
 
+  // ── Champion storylines (computed against PRIOR history) ──
+  const champName = S.champion.name
+  const prevTitles = (S.history || []).filter(h => h.champion === champName).length
+  const lastChamp = S.history?.[S.history.length - 1]?.champion
+  if (prevTitles === 0) {
+    addStory('🏆', `${champName} are World Champions for the FIRST TIME in their history!`)
+  } else if (lastChamp === champName) {
+    addStory('🏆', `BACK-TO-BACK! ${champName} defend their crown — title #${prevTitles + 1}!`)
+  } else {
+    const since = editionsSinceTitle(champName)
+    if (since && since >= 4) addStory('🏆', `${champName} end the drought — first title in ${since} editions! (#${prevTitles + 1} overall)`)
+    else addStory('🏆', `${champName} win World Cup #${S.wcNumber} — title #${prevTitles + 1}!`)
+  }
+  ;(S.champion.stars || []).forEach(st => {
+    if (isLastDance(st)) addStory('✨', `Fairytale ending: ${st.name} retires on top of the world — ${careerLine(st)}.`)
+  })
+
+  // ── Records ──
+  S.records = S.records || {}
+  if (topScorer && (!S.records.mostGoalsOneWC || topGoals > S.records.mostGoalsOneWC.goals)) {
+    S.records.mostGoalsOneWC = { name:topScorer.name, team:topScorer.teamName, goals:topGoals, wc:S.wcNumber }
+  }
+
   S.history = S.history || []
   S.history.push({
     wcNumber: S.wcNumber,
@@ -311,6 +394,22 @@ export function startNewWC() {
   ratingChanges.sort((a,b) => Math.abs(b.delta) - Math.abs(a.delta))
 
   const { retiring, debuting } = ageAllStars(S.wcNumber)
+
+  // ── Legends archive (for GOAT & records pages) ──
+  S.legends = S.legends || []
+  retiring.forEach(st => {
+    const notable = ['epic','legendary','generational'].includes(st.tier)
+      || (st.medals?.gold || 0) > 0 || (st.careerGoals || 0) >= 10
+    if (notable) {
+      S.legends.push({
+        name: st.name, cc: st.cc, teamName: st.teamName, pos: st.pos, tier: st.tier,
+        careerGoals: st.careerGoals || 0, fame: st.fame || 0,
+        medals: { ...(st.medals || {}) }, wcsPlayed: st.wcsPlayed || 0,
+        retiredWC: S.wcNumber,
+      })
+    }
+  })
+
   return { retiring, debuting, host: S.hostNation, ratingChanges: ratingChanges.slice(0, 8) }
 }
 

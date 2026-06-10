@@ -123,6 +123,7 @@ export function syncStarsBack(nation, teamStars) {
     const ns = nation.stars.find(s => s.id === ts.id)
     if (!ns) return
     ns.goals = (ns.goals || 0) + (ts.goals || 0)
+    ns.careerGoals = (ns.careerGoals || 0) + (ts.goals || 0)
     ns.goalsConceded = (ns.goalsConceded || 0) + (ts.goalsConceded || 0)
     ns.fame = (ns.fame || 0) + (ts.fame || 0)
     if (ts.medals) {

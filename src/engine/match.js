@@ -15,7 +15,7 @@ export const gaussRand = (sig = 1) => {
 export const ovr = s => s ? Math.round((s.attack+s.defense+s.stamina+s.mental+s.setPieces)/5) : 0
 
 // Star tier multipliers for stat bonuses
-export const STAR_MULT = { generational:3.5, legendary:2.5, epic:2.0, rare:1.5, uncommon:1.2, common:1.0 }
+export const STAR_MULT = { generational:2.2, legendary:1.8, epic:1.5, rare:1.25, uncommon:1.1, common:1.0 }
 
 // ── Per-tier stat bonuses (CL-style) ─────────────────────────
 // Higher tiers unlock more stats AND bigger numbers.
@@ -58,36 +58,36 @@ export const STAR_BONUSES = {
 // Goal distribution per position × tier — [P(0g),P(1g),P(2g),P(3g),P(4g)]
 export const GOAL_DIST = {
   FWD: {
-    common:       [0.60, 0.30, 0.10, 0.00, 0.00],
-    uncommon:     [0.50, 0.35, 0.13, 0.02, 0.00],
-    rare:         [0.38, 0.38, 0.18, 0.05, 0.01],
-    epic:         [0.22, 0.35, 0.28, 0.12, 0.03],
-    legendary:    [0.10, 0.25, 0.35, 0.22, 0.08],
-    generational: [0.04, 0.18, 0.34, 0.28, 0.14],
+    common:       [0.74, 0.22, 0.04, 0.00, 0.00],
+    uncommon:     [0.68, 0.26, 0.06, 0.00, 0.00],
+    rare:         [0.60, 0.30, 0.09, 0.01, 0.00],
+    epic:         [0.52, 0.34, 0.12, 0.02, 0.00],
+    legendary:    [0.42, 0.38, 0.16, 0.04, 0.00],
+    generational: [0.34, 0.40, 0.20, 0.05, 0.01],
   },
   MID: {
-    common:       [0.80, 0.17, 0.03, 0.00, 0.00],
-    uncommon:     [0.72, 0.22, 0.05, 0.01, 0.00],
-    rare:         [0.60, 0.28, 0.10, 0.02, 0.00],
-    epic:         [0.45, 0.35, 0.15, 0.05, 0.00],
-    legendary:    [0.30, 0.35, 0.25, 0.08, 0.02],
-    generational: [0.18, 0.32, 0.30, 0.14, 0.05],
+    common:       [0.88, 0.11, 0.01, 0.00, 0.00],
+    uncommon:     [0.84, 0.14, 0.02, 0.00, 0.00],
+    rare:         [0.78, 0.19, 0.03, 0.00, 0.00],
+    epic:         [0.70, 0.25, 0.05, 0.00, 0.00],
+    legendary:    [0.62, 0.30, 0.07, 0.01, 0.00],
+    generational: [0.54, 0.35, 0.10, 0.01, 0.00],
   },
   DEF: {
-    common:       [0.92, 0.07, 0.01, 0.00, 0.00],
-    uncommon:     [0.88, 0.11, 0.01, 0.00, 0.00],
-    rare:         [0.80, 0.16, 0.03, 0.01, 0.00],
-    epic:         [0.70, 0.22, 0.07, 0.01, 0.00],
-    legendary:    [0.55, 0.30, 0.12, 0.03, 0.00],
-    generational: [0.42, 0.34, 0.18, 0.05, 0.01],
+    common:       [0.96, 0.04, 0.00, 0.00, 0.00],
+    uncommon:     [0.94, 0.06, 0.00, 0.00, 0.00],
+    rare:         [0.90, 0.09, 0.01, 0.00, 0.00],
+    epic:         [0.86, 0.13, 0.01, 0.00, 0.00],
+    legendary:    [0.80, 0.17, 0.03, 0.00, 0.00],
+    generational: [0.74, 0.22, 0.04, 0.00, 0.00],
   },
   GK: {
     common:       [1.00, 0.00, 0.00, 0.00, 0.00],
     uncommon:     [1.00, 0.00, 0.00, 0.00, 0.00],
-    rare:         [0.99, 0.01, 0.00, 0.00, 0.00],
-    epic:         [0.98, 0.02, 0.00, 0.00, 0.00],
-    legendary:    [0.95, 0.05, 0.00, 0.00, 0.00],
-    generational: [0.92, 0.07, 0.01, 0.00, 0.00],
+    rare:         [1.00, 0.00, 0.00, 0.00, 0.00],
+    epic:         [0.99, 0.01, 0.00, 0.00, 0.00],
+    legendary:    [0.98, 0.02, 0.00, 0.00, 0.00],
+    generational: [0.97, 0.03, 0.00, 0.00, 0.00],
   },
 }
 
@@ -172,12 +172,12 @@ function computeMatchStats(myE, oppE) {
 
 // ── Stats → raw goals ─────────────────────────────────────────
 function statsToGoals(matchStats, myE, possessionPct) {
-  const spGap = myE.setPieces - 70
-  const convMax = clamp(0.18 + spGap / 1000, 0.13, 0.24)
+  const spGap = myE.setPieces - 85
+  const convMax = clamp(0.15 + spGap / 1400, 0.11, 0.20)
   const conv = Math.random() * convMax
   let shotGoals   = matchStats.shots * conv
-  let possGoals   = possessionPct >= 70 ? 1 : 0
-  let cornerConv  = clamp(0.03 + spGap * 0.001, 0.01, 0.08)
+  let possGoals   = possessionPct >= 72 ? 1 : 0
+  let cornerConv  = clamp(0.025 + spGap * 0.0008, 0.01, 0.07)
   let cornerGoals = matchStats.corners * cornerConv
   return Math.max(0, shotGoals + possGoals + cornerGoals)
 }

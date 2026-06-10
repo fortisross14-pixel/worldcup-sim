@@ -1,4 +1,4 @@
-import { S, autoSave, loadGame, clearGame, exportSave, importSave, saveSlot, loadSlot, allSlotInfo, deleteSlot } from './store.js'
+import { S, autoSave, loadGame, clearGame, exportSave, importSave, loadSlot, allSlotInfo, deleteSlot, setActiveSlot, getActiveSlot } from './store.js'
 import { ALL_NATIONS, flag, getSoul } from './data/nations.js'
 import { initAllStars, ageAllStars, TIER_LABELS, TIER_COLORS, TIER_ORDER } from './engine/stars.js'
 import {
@@ -367,13 +367,15 @@ function showMatchPopup(r, roundName, onClose) {
   const t1 = r.t1, t2 = r.t2
   const stars1 = t1.stars || [], stars2 = t2.stars || []
 
+  const isFinal = roundName === 'Final'
   function renderFrame(minute, score1, score2, events, finished) {
     const skipBtn  = finished ? '' : `<button class="btn btn-sm" onclick="window.skipPlayback()">Skip ⏭</button>`
     const closeBtn = finished ? `<button class="btn btn-primary" onclick="window.closePlayback()">Continue ▶</button>` : ''
     inner.innerHTML = `
-      <div class="playback-card">
+      <div class="playback-card ${isFinal?'final-theme':''}">
+        ${isFinal?'<div class="final-banner">🏆 WORLD CUP FINAL 🏆</div>':''}
         <div class="playback-header">
-          <div class="playback-round">${roundName.toUpperCase()}</div>
+          <div class="playback-round">${isFinal?`WORLD CUP #${S.wcNumber}`:roundName.toUpperCase()}</div>
           <div class="playback-clock ${finished?'final':''}">${finished?'FT':minute+"'"}</div>
         </div>
         <div class="playback-score-row">
@@ -613,32 +615,90 @@ function renderPlayerStats() {
   </div>`
 }
 
+
+// ── LIVE WIDGETS (Golden Boot + MVP race + Storylines) ────────
+function findStarByName(name) {
+  for (const t of (S.teams || [])) {
+    const s = (t.stars || []).find(x => x.name === name)
+    if (s) return { ...s, teamName: t.name, cc: t.cc }
+  }
+  return null
+}
+
+function renderLiveWidgets() {
+  const scorers = Object.entries(S.scorers || {}).sort((a,b) => b[1]-a[1]).slice(0, 5)
+  const allStars = []
+  ;(S.teams || []).forEach(t => (t.stars || []).forEach(s => allStars.push({ ...s, teamName: t.name, cc: t.cc })))
+  const avgR = s => s.ratings?.length ? s.ratings.reduce((a,b)=>a+b,0)/s.ratings.length : 0
+  const offs = allStars.filter(s => ['FWD','MID'].includes(s.pos) && s.ratings?.length >= 2).sort((a,b)=>avgR(b)-avgR(a)).slice(0,3)
+  const defs = allStars.filter(s => ['DEF','GK'].includes(s.pos) && s.ratings?.length >= 2).sort((a,b)=>avgR(b)-avgR(a)).slice(0,3)
+
+  let html = '<div class="widgets-row">'
+  if (scorers.length) {
+    html += `<div class="widget-card">
+      <div class="widget-title">🥇 GOLDEN BOOT</div>
+      ${scorers.map(([name, g], i) => {
+        const st = findStarByName(name)
+        return `<div class="widget-row ${i===0?'leader':''}" ${st?`onclick="openStarModal('${st.id}','${st.teamName}')" style="cursor:pointer"`:''}>
+          <span class="widget-rank">${i+1}</span>
+          <span class="widget-name">${st?flag(st.cc,16)+' ':''}${name}</span>
+          <span class="widget-val">${g} ⚽</span>
+        </div>`
+      }).join('')}
+    </div>`
+  }
+  if (offs.length || defs.length) {
+    html += `<div class="widget-card">
+      <div class="widget-title">⭐ MVP RACE</div>
+      ${offs.map((s,i) => `<div class="widget-row ${i===0?'leader':''}" onclick="openStarModal('${s.id}','${s.teamName}')" style="cursor:pointer">
+        <span class="widget-rank">${s.pos}</span>
+        <span class="widget-name">${flag(s.cc,16)} ${s.name}</span>
+        <span class="widget-val">${avgR(s).toFixed(1)} ★</span>
+      </div>`).join('')}
+      ${defs.length ? '<div class="widget-divider"></div>' : ''}
+      ${defs.map((s,i) => `<div class="widget-row" onclick="openStarModal('${s.id}','${s.teamName}')" style="cursor:pointer">
+        <span class="widget-rank">${s.pos}</span>
+        <span class="widget-name">${flag(s.cc,16)} ${s.name}</span>
+        <span class="widget-val" style="color:var(--blue)">${avgR(s).toFixed(1)} ★</span>
+      </div>`).join('')}
+    </div>`
+  }
+  html += '</div>'
+  return html
+}
+
+function renderStorylineFeed(limit = 8) {
+  const st = (S.storylines || []).slice().reverse().slice(0, limit)
+  if (!st.length) return ''
+  return `<div class="sec">📰 STORYLINES</div>
+    <div class="story-feed">${st.map(s => `<div class="story-card">${s.icon} ${s.text}</div>`).join('')}</div>`
+}
+
 // ── PLAY tab ──────────────────────────────────────────────────
 function renderPlay() {
   const el = $('tab-play'); if (!el) return
   const p = S.phase || 'idle'
 
   if (!S.teams?.length) {
-    el.innerHTML = `<div style="text-align:center;padding:36px 16px">
+    el.innerHTML = `<div style="text-align:center;padding:48px 16px">
       <div style="font-size:64px;margin-bottom:12px">⚽</div>
       <div style="font-family:var(--font-head);font-size:36px;letter-spacing:.12em;color:var(--gold2)">WORLD CUP SIMULATOR</div>
       <div style="color:var(--txt2);margin:8px 0 24px">48 nations. 3 stars each. One champion.</div>
-      <button class="btn btn-primary" onclick="handleMain()" style="padding:12px 32px;font-size:15px">▶ Begin New World Cup</button>
-      <div class="sec" style="margin-top:28px">SAVE SLOTS</div>
-      <div id="home-slots" class="slots-grid"></div>
+      <button class="btn btn-primary" onclick="handleMain()" style="padding:12px 32px;font-size:15px">▶ Begin World Cup ${S.wcNumber||1}</button>
     </div>`
-    renderHomeSlots()
     return
   }
 
   let html = ''
   if (p === 'done') {
     const aw = S.seasonAwards || {}
+    const champStars = S.champion?.stars || []
     html = `
-      <div class="champion-banner">
-        <div style="font-size:52px">🏆</div>
+      <div class="champion-banner grand">
+        <div class="champ-trophy">🏆</div>
         <div class="champ-title">WORLD CUP #${S.wcNumber} CHAMPIONS</div>
-        <div class="champ-name">${flag(S.champion?.cc||'')} ${S.champion?.name}</div>
+        <div class="champ-name">${flag(S.champion?.cc||'',28)} ${S.champion?.name}</div>
+        ${champStars.length?`<div class="champ-stars">${champStars.map(s=>`<span class="champ-star" style="color:${tierColor(s.tier)}">⭐ ${s.name}${(s.goals||0)>0?` (${s.goals}⚽)`:''}</span>`).join('')}</div>`:''}
       </div>
       ${aw.topScorer||aw.offMVP||aw.defMVP?`
       <div class="sec">TOURNAMENT AWARDS</div>
@@ -647,7 +707,8 @@ function renderPlay() {
         ${aw.offMVP?`<div class="award-card"><div class="award-icon">🌟</div><div class="award-label">Offensive MVP</div><div class="award-name">${aw.offMVP.name}</div><div class="award-sub">${aw.offMVP.rating} avg · ${aw.offMVP.pos}</div></div>`:''}
         ${aw.defMVP?`<div class="award-card"><div class="award-icon">🛡️</div><div class="award-label">Defensive MVP</div><div class="award-name">${aw.defMVP.name}</div><div class="award-sub">${aw.defMVP.rating} avg · ${aw.defMVP.pos}</div></div>`:''}
       </div>`:''}
-      ${renderTopScorers()}`
+      ${renderTopScorers()}
+      ${renderStorylineFeed(12)}`
   } else if (p === 'groups') {
     const played = S.groupMatches.filter(m=>m.played).length, total=S.groupMatches.length
     html = `<div class="sec">GROUP STAGE — ${played}/${total}</div>
@@ -655,6 +716,8 @@ function renderPlay() {
       <div class="row" style="gap:6px;margin-bottom:10px">
         <button class="btn btn-sm" onclick="skipAllGroups()">⏭⏭ Skip All Groups</button>
       </div>
+      ${renderLiveWidgets()}
+      ${renderStorylineFeed(5)}
       ${renderRecentResults()}`
   } else if (p === 'knockout') {
     const round = S.knockoutRounds[S.knockoutRounds.length-1]
@@ -662,9 +725,12 @@ function renderPlay() {
       <div class="row" style="gap:6px;margin-bottom:10px">
         <button class="btn btn-sm" onclick="skipKORound()">⏭ Skip This Round</button>
       </div>
+      ${renderLiveWidgets()}
+      ${renderStorylineFeed(5)}
       ${renderRecentResults()}`
   } else if (p === 'qualified') {
-    html = `<div class="sec">QUALIFIED NATIONS (${S.teams?.length||0})</div>
+    html = `${renderStorylineFeed(6)}
+      <div class="sec">QUALIFIED NATIONS (${S.teams?.length||0})</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px">
         ${[...(S.teams||[])].sort((a,b)=>b.rating-a.rating).map(t=>`
           <div class="card card-click" style="padding:7px 10px" onclick="openTeamModal('${t.name}')">
@@ -707,12 +773,22 @@ function renderGroups() {
       <div class="group-title">Group ${grp.id}
         <button class="btn btn-sm" style="font-size:9px;margin-left:4px" onclick="skipGroup(${gi})">⏭ Skip</button>
       </div>
-      ${sorted.map((t,i)=>`<div class="group-row ${i<2?'qualifies':''}" onclick="openTeamModal('${t.name}')">
-        ${flag(t.cc)} <span class="group-name">${t.name}</span>
-        ${(t.stars||[]).some(s=>['generational','legendary'].includes(s.tier))?`<span style="color:${tierColor((t.stars||[]).find(s=>['generational','legendary'].includes(s.tier))?.tier)};font-size:10px">⭐</span>`:''}
-        <span class="group-pts">${t.pts||0}</span>
-        <span class="group-rec">${t.w||0}/${t.d||0}/${t.l||0}</span>
-      </div>`).join('')}
+      <div class="group-table-head">
+        <span></span><span></span>
+        <span class="gt-col">OVR</span><span class="gt-col">GF</span><span class="gt-col">GA</span><span class="gt-col">Pts</span>
+      </div>
+      ${sorted.map((t,i)=>{
+        const eff = getEffStats(t)
+        const o = Math.round((eff.attack+eff.defense+eff.stamina+eff.mental+eff.setPieces)/5)
+        const topStar = (t.stars||[]).find(s=>['generational','legendary'].includes(s.tier))
+        return `<div class="group-row ${i<2?'qualifies':''}" onclick="openTeamModal('${t.name}')">
+          ${flag(t.cc)} <span class="group-name">${t.name}${topStar?` <span style="color:${tierColor(topStar.tier)};font-size:10px">⭐</span>`:''}</span>
+          <span class="gt-col gt-ovr">${o}</span>
+          <span class="gt-col">${t.gf||0}</span>
+          <span class="gt-col">${t.ga||0}</span>
+          <span class="gt-col group-pts">${t.pts||0}</span>
+        </div>`
+      }).join('')}
     </div>`
   })
   html += '</div>'
@@ -979,9 +1055,87 @@ window.openTeamModal = function(teamName) {
 window.closeTeamModal = () => { $('team-modal-overlay').style.display='none' }
 
 // ── HISTORY tab ───────────────────────────────────────────────
+let historySubTab = 'tournaments'
+window.setHistoryTab = t => { historySubTab = t; renderHistory() }
+
 function renderHistory() {
   const el = $('tab-history'); if (!el) return
-  if (!S.history?.length) { el.innerHTML='<div class="empty">No history yet</div>'; return }
+  const tabs = `<div class="sub-tab-row">
+    <button class="sub-tab ${historySubTab==='tournaments'?'active':''}" onclick="setHistoryTab('tournaments')">📜 Tournaments</button>
+    <button class="sub-tab ${historySubTab==='records'?'active':''}" onclick="setHistoryTab('records')">📊 Records</button>
+    <button class="sub-tab ${historySubTab==='goat'?'active':''}" onclick="setHistoryTab('goat')">🐐 GOAT</button>
+  </div>`
+  if (historySubTab === 'records') { el.innerHTML = tabs + renderRecords(); return }
+  if (historySubTab === 'goat')    { el.innerHTML = tabs + renderGOAT(); return }
+  if (!S.history?.length) { el.innerHTML = tabs + '<div class="empty">No history yet</div>'; return }
+  el.innerHTML = tabs + renderTournamentsHistory()
+}
+
+// ── GOAT scoring: career body of work ──
+function goatCandidates() {
+  // Legends archive + active stars with careers
+  const all = [...(S.legends || [])]
+  ALL_NATIONS.forEach(n => (n.stars || []).forEach(s => {
+    all.push({ name:s.name, cc:n.cc, teamName:n.name, pos:s.pos, tier:s.tier,
+      careerGoals:(s.careerGoals||0)+(s.goals||0), fame:s.fame||0,
+      medals:s.medals||{}, wcsPlayed:(s.wcsPlayed||0), active:true })
+  }))
+  all.forEach(p => {
+    const m = p.medals || {}
+    p.goatScore = Math.round(
+      (m.gold||0)*200 + (m.silver||0)*80 + (m.bronze||0)*40 +
+      (p.careerGoals||0)*12 + (p.fame||0)*0.5 +
+      ({generational:100,legendary:60,epic:30,rare:10}[p.tier]||0)
+    )
+  })
+  return all.filter(p => p.goatScore > 0).sort((a,b)=>b.goatScore-a.goatScore)
+}
+
+function renderGOAT() {
+  const list = goatCandidates().slice(0, 20)
+  if (!list.length) return '<div class="empty">No careers yet — play some World Cups!</div>'
+  return `<div class="sec">🐐 GREATEST OF ALL TIME</div>
+    <div class="goat-list">
+    ${list.map((p,i)=>`<div class="goat-row ${i===0?'goat-first':''}">
+      <div class="goat-rank">${i+1}</div>
+      <div class="goat-main">
+        <div class="goat-name">${flag(p.cc,18)} ${p.name} ${p.active?'<span class="goat-active">ACTIVE</span>':''}</div>
+        <div class="goat-sub" style="color:${tierColor(p.tier)}">${TIER_LABELS[p.tier]||p.tier} ${p.pos} · ${p.teamName} · ${p.wcsPlayed||0} WCs</div>
+        <div class="goat-stats">⚽ ${p.careerGoals||0} · 🥇${p.medals?.gold||0} 🥈${p.medals?.silver||0} 🥉${p.medals?.bronze||0} · ⚡${p.fame||0}</div>
+      </div>
+      <div class="goat-score">${p.goatScore}</div>
+    </div>`).join('')}
+    </div>`
+}
+
+function renderRecords() {
+  const r = S.records || {}
+  const cands = goatCandidates()
+  const mostGoals = cands.slice().sort((a,b)=>(b.careerGoals||0)-(a.careerGoals||0))[0]
+  const mostTitles = cands.slice().sort((a,b)=>(b.medals?.gold||0)-(a.medals?.gold||0))[0]
+  const mostWCs = cands.slice().sort((a,b)=>(b.wcsPlayed||0)-(a.wcsPlayed||0))[0]
+  // Team records from history
+  const titles = {}
+  ;(S.history||[]).forEach(h => { titles[h.champion] = (titles[h.champion]||0)+1 })
+  const teamRank = Object.entries(titles).sort((a,b)=>b[1]-a[1]).slice(0,5)
+  const recCard = (icon, label, value, sub) => `<div class="record-card">
+    <div class="record-icon">${icon}</div>
+    <div class="record-body"><div class="record-label">${label}</div>
+    <div class="record-value">${value}</div>${sub?`<div class="record-sub">${sub}</div>`:''}</div>
+  </div>`
+  let html = '<div class="sec">📊 ALL-TIME RECORDS</div><div class="records-grid">'
+  if (teamRank.length) html += recCard('🏆','Most Titles (Team)', `${teamRank[0][0]} — ${teamRank[0][1]}`, teamRank.slice(1,4).map(([n,t])=>`${n} (${t})`).join(' · '))
+  if (r.biggestWin) html += recCard('💥','Biggest Win', `${r.biggestWin.winner} ${r.biggestWin.g1}–${r.biggestWin.g2} ${r.biggestWin.loser}`, `World Cup #${r.biggestWin.wc}`)
+  if (r.mostGoalsOneWC) html += recCard('🔥','Most Goals in One WC', `${r.mostGoalsOneWC.name} — ${r.mostGoalsOneWC.goals}`, `${r.mostGoalsOneWC.team} · WC #${r.mostGoalsOneWC.wc}`)
+  if (mostGoals && mostGoals.careerGoals) html += recCard('⚽','Career Goals', `${mostGoals.name} — ${mostGoals.careerGoals}`, mostGoals.teamName)
+  if (mostTitles && (mostTitles.medals?.gold||0) > 0) html += recCard('🥇','Most Titles (Player)', `${mostTitles.name} — ${mostTitles.medals.gold}`, mostTitles.teamName)
+  if (mostWCs && mostWCs.wcsPlayed >= 3) html += recCard('🗓️','Most World Cups Played', `${mostWCs.name} — ${mostWCs.wcsPlayed}`, mostWCs.teamName)
+  html += '</div>'
+  if (html.indexOf('record-card') === -1) return '<div class="empty">No records yet — play some World Cups!</div>'
+  return html
+}
+
+function renderTournamentsHistory() {
   const hist = [...S.history].reverse()
   // Team rankings
   const teamRank = {}
@@ -1010,7 +1164,7 @@ function renderHistory() {
   })
   const pList = Object.values(playerData)
 
-  el.innerHTML = `
+  return `
     <div class="sec">TOURNAMENT HISTORY</div>
     ${hist.map(h=>`<div class="history-card">
       <div class="history-wc">WORLD CUP #${h.wcNumber}</div>
@@ -1109,60 +1263,96 @@ window.continueNewWC = function() {
   toast(`World Cup #${S.wcNumber} begins!`)
 }
 
-// ── SETTINGS ──────────────────────────────────────────────────
-// ── HOME SAVE SLOTS (3 slots) ─────────────────────────────────
-async function renderHomeSlots() {
-  const el = $('home-slots'); if (!el) return
+// ── SETTINGS + SLOT SELECT ────────────────────────────────────
+async function renderSlotSelect() {
+  document.querySelector('.nav')?.style.setProperty('display', 'none')
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+  $('tab-play').classList.add('active')
+  const el = $('tab-play')
   const slots = await allSlotInfo()
-  el.innerHTML = [1,2,3].map(n => {
-    const s = slots[n]
-    if (!s) {
-      return `<div class="slot-card empty-slot">
-        <div class="slot-num">SLOT ${n}</div>
-        <div class="slot-empty-label">Empty</div>
-      </div>`
-    }
-    const champs = (s.history||[]).filter(h=>h.champion).length
-    return `<div class="slot-card">
-      <div class="slot-num">SLOT ${n}</div>
-      <div class="slot-info">
-        <div class="slot-wc">World Cup #${s.wcNumber||1}</div>
-        <div class="slot-meta">${(s.history||[]).length} editions played</div>
-        ${s.history?.length?`<div class="slot-meta">Last: ${flag(s.history[s.history.length-1].cc)} ${s.history[s.history.length-1].champion}</div>`:''}
-        <div class="slot-date">${new Date(s.savedAt).toLocaleDateString()}</div>
-      </div>
-      <div class="slot-actions">
-        <button class="btn btn-sm btn-primary" onclick="loadHomeSlot(${n})">Load</button>
-        <button class="btn btn-sm" onclick="deleteHomeSlot(${n})">✕</button>
-      </div>
+  el.innerHTML = `
+    <div style="text-align:center;padding:32px 16px 16px">
+      <div style="font-size:60px;margin-bottom:10px">⚽</div>
+      <div style="font-family:var(--font-head);font-size:34px;letter-spacing:.12em;color:var(--gold2)">WORLD CUP SIMULATOR</div>
+      <div style="color:var(--txt2);margin:6px 0 24px">Choose a save slot to begin</div>
+    </div>
+    <div class="slots-grid">
+      ${[1,2,3].map(n => {
+        const s = slots[n]
+        if (!s) {
+          return `<div class="slot-card empty-slot" onclick="startInSlot(${n})" style="cursor:pointer">
+            <div class="slot-num">SLOT ${n}</div>
+            <div class="slot-empty-label">+ New Game</div>
+          </div>`
+        }
+        const last = s.history?.[s.history.length-1]
+        return `<div class="slot-card">
+          <div class="slot-num">SLOT ${n}</div>
+          <div class="slot-info">
+            <div class="slot-wc">World Cup #${s.wcNumber||1}</div>
+            <div class="slot-meta">${(s.history||[]).length} editions played</div>
+            ${last?`<div class="slot-meta">Last: ${flag(last.cc)} ${last.champion}</div>`:'<div class="slot-meta">In progress</div>'}
+            <div class="slot-date">${new Date(s.savedAt).toLocaleDateString()}</div>
+          </div>
+          <div class="slot-actions">
+            <button class="btn btn-sm btn-primary" onclick="continueInSlot(${n})">Continue</button>
+            <button class="btn btn-sm" onclick="deleteHomeSlot(${n})">✕</button>
+          </div>
+        </div>`
+      }).join('')}
     </div>`
-  }).join('')
 }
 
-window.loadHomeSlot = async function(n) {
+window.startInSlot = async function(n) {
+  setActiveSlot(n)
+  S.wcNumber = 1; S.phase = 'idle'
+  S.teams = []; S.groups = []; S.groupMatches = []; S.knockoutRounds = []
+  S.history = []; S.champion = null; S.roundReached = {}
+  S.scorers = {}; S.teamGoals = {}; S.teamGoalsConceded = {}; S.allMatchResults = []; S.seasonAwards = {}
+  S.storylines = []; S.legends = []; S.records = {}
+  resetNameTracking()
+  ALL_NATIONS.forEach(nat => { delete nat.stars; delete nat.stats; delete nat._lastRating })
+  initAllStars(1)
+  await autoSave()
+  document.querySelector('.nav')?.style.setProperty('display', 'flex')
+  updatePhaseUI(); switchTab('play')
+  toast(`New game started in Slot ${n}`)
+}
+
+window.continueInSlot = async function(n) {
   try {
     await loadSlot(n)
-    updatePhaseUI(); renderPlay()
+    if (!ALL_NATIONS.some(nat=>nat.stars?.length)) initAllStars(S.wcNumber||1)
+    document.querySelector('.nav')?.style.setProperty('display', 'flex')
+    updatePhaseUI(); switchTab('play')
     if (S.groups?.length) renderGroups()
     if (S.knockoutRounds?.length) renderBracket()
     toast(`Loaded Slot ${n} — WC #${S.wcNumber}`)
   } catch(e) { toast('Slot is empty') }
 }
+
 window.deleteHomeSlot = async function(n) {
   await deleteSlot(n)
-  renderHomeSlots()
+  renderSlotSelect()
   toast(`Slot ${n} cleared`)
 }
-window.saveToSlot = async function(n) {
-  await saveSlot(n)
-  toast(`Saved to Slot ${n}`)
+
+window.goHome = function() {
   closeSettings()
+  setActiveSlot(null)
+  renderSlotSelect()
 }
 
 window.openSettings  = () => {
-  // Refresh the save-slot buttons in settings each open
   const slotBar = $('settings-slots')
-  if (slotBar) slotBar.innerHTML = [1,2,3].map(n=>`<button class="settings-item" onclick="saveToSlot(${n})">💾 Save to Slot ${n}</button>`).join('')
+  if (slotBar) {
+    const active = getActiveSlot()
+    slotBar.innerHTML = `
+      <div style="padding:8px 14px;font-size:11px;color:var(--txt3);font-family:var(--font-head);letter-spacing:.08em">
+        ${active ? `AUTOSAVING TO SLOT ${active}` : 'NO ACTIVE SLOT'}
+      </div>
+      <button class="settings-item" onclick="goHome()">🏠 Home (Slots)</button>`
+  }
   $('settings-overlay').style.display='flex'
 }
 window.closeSettings = () => { $('settings-overlay').style.display='none' }
@@ -1187,18 +1377,7 @@ window.confirmDeny   = () => { $('confirm-overlay').style.display='none'; _cb=nu
 
 // ── INIT ──────────────────────────────────────────────────────
 async function init() {
-  const loaded = await loadGame()
-  if (!loaded) {
-    S.wcNumber = 1; S.phase = 'idle'
-    resetNameTracking()
-    initAllStars(1)
-  } else {
-    // Restore stars to ALL_NATIONS from saved S data if possible
-    // Stars are stored on nation objects which aren't in S — they persist via module state
-    // If page reload cleared them, reinit
-    if (!ALL_NATIONS.some(n=>n.stars?.length)) initAllStars(S.wcNumber||1)
-  }
-  updatePhaseUI()
+  await renderSlotSelect()
 }
 
 init()

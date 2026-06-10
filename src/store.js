@@ -1,5 +1,9 @@
 const DB_NAME = 'wcsim', DB_VER = 1, STORE = 'saves', AUTO_KEY = 'autosave'
 let _db = null
+let _activeSlot = null  // which slot autosave writes to
+
+export function setActiveSlot(n) { _activeSlot = n }
+export function getActiveSlot() { return _activeSlot }
 
 async function getDB() {
   if (_db) return _db
@@ -71,18 +75,45 @@ export const S = {
   nextId: 1,
 }
 
+import { ALL_NATIONS } from './data/nations.js'
+
 function buildSave() {
   return {
     ...JSON.parse(JSON.stringify(S)),
+    // Stars/stats live on ALL_NATIONS module state, not in S — snapshot them
+    _nationData: ALL_NATIONS.map(n => ({
+      name: n.name,
+      stars: n.stars || [],
+      stats: n.stats || null,
+      _lastRating: n._lastRating ?? null,
+    })),
     savedAt: Date.now()
   }
 }
 
+export function restoreNationData(save) {
+  if (!save?._nationData) return false
+  save._nationData.forEach(nd => {
+    const n = ALL_NATIONS.find(x => x.name === nd.name)
+    if (!n) return
+    n.stars = nd.stars || []
+    if (nd.stats) n.stats = nd.stats
+    if (nd._lastRating != null) n._lastRating = nd._lastRating
+  })
+  return true
+}
+
 export async function autoSave() {
   try {
-    await dbPut(AUTO_KEY, buildSave())
+    const data = buildSave()
+    if (_activeSlot) {
+      data.slotNum = _activeSlot
+      await dbPut('slot_' + _activeSlot, data)
+    } else {
+      await dbPut(AUTO_KEY, data)
+    }
     const el = document.getElementById('last-saved')
-    if (el) el.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })
+    if (el) el.textContent = 'Saved' + (_activeSlot ? ` · Slot ${_activeSlot}` : '')
   } catch (e) { console.warn('autosave failed', e) }
 }
 
@@ -96,21 +127,18 @@ export async function loadGame() {
 }
 
 export async function clearGame() {
+  if (_activeSlot) await dbDelete('slot_' + _activeSlot).catch(() => {})
   await dbDelete(AUTO_KEY).catch(() => {})
 }
 
-// ── Named save slots (3-slot home page) ───────────────────────
-export async function saveSlot(slotNum) {
-  const data = buildSave()
-  data.slotNum = slotNum
-  await dbPut('slot_' + slotNum, data)
-}
 
+// ── Named save slots (3-slot home page) ───────────────────────
 export async function loadSlot(slotNum) {
   const d = await dbGet('slot_' + slotNum)
   if (!d) throw new Error('Slot empty')
   Object.assign(S, d)
-  await autoSave()
+  restoreNationData(d)
+  _activeSlot = slotNum
 }
 
 export async function getSlotInfo(slotNum) {
