@@ -1391,7 +1391,7 @@ window.continueNewWC = function() {
 
 // ── SETTINGS + SLOT SELECT ────────────────────────────────────
 async function renderSlotSelect() {
-  document.querySelector('.nav')?.style.setProperty('display', 'none')
+  document.body.classList.add('slot-select-mode')
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
   $('tab-play').classList.add('active')
   const el = $('tab-play')
@@ -1440,7 +1440,7 @@ window.startInSlot = async function(n) {
   ALL_NATIONS.forEach(nat => { delete nat.stars; delete nat.stats; delete nat._lastRating })
   initAllStars(1)
   await autoSave()
-  document.querySelector('.nav')?.style.setProperty('display', 'flex')
+  document.body.classList.remove('slot-select-mode')
   updatePhaseUI(); switchTab('play')
   toast(`New game started in Slot ${n}`)
 }
@@ -1449,7 +1449,7 @@ window.continueInSlot = async function(n) {
   try {
     await loadSlot(n)
     if (!ALL_NATIONS.some(nat=>nat.stars?.length)) initAllStars(S.wcNumber||1)
-    document.querySelector('.nav')?.style.setProperty('display', 'flex')
+    document.body.classList.remove('slot-select-mode')
     updatePhaseUI(); switchTab('play')
     if (S.groups?.length) renderGroups()
     if (S.knockoutRounds?.length) renderBracket()
