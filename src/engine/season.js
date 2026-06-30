@@ -17,7 +17,7 @@ function gauss(sig = 3.5, maxAbs = 12) {
 // ── History component (0–20 pts based on last 5 WCs) ─────────
 function histPts(nationName) {
   if (!S.history?.length) return 0
-  const pts = { Winner:20, Final:15, 'Semi-finals':10, 'Quarter-finals':6, 'Round of 32':3, Group:1 }
+  const pts = { Winner:20, Final:15, 'Semi-finals':10, 'Quarter-finals':6, 'Round of 16':3, Group:1 }
   const recent = [...S.history].reverse().slice(0, 5)
   let ws = 0, ss = 0
   recent.forEach((h, i) => {
@@ -80,25 +80,38 @@ export function runQualification() {
     scored.slice(0, needed).forEach(({ n }) => { qualified.push(n); qualSet.add(n.name) })
   })
 
-  // Fill to 48
-  while (qualified.length < 48) {
+  // Fill to 32
+  while (qualified.length < 32) {
     const pool = ALL_NATIONS.filter(n => !qualSet.has(n.name))
     if (!pool.length) break
     const n = pool[Math.floor(Math.random() * pool.length)]
     qualified.push(n); qualSet.add(n.name)
   }
 
-  // Build team objects
-  S.teams = shuffle(qualified.slice(0, 48)).map(nation => {
-    const rating = seasonRating(nation)
+  // Host's confederation (for the +4 bonus)
+  const hostNation = ALL_NATIONS.find(n => n.name === S.hostNation)
+  const hostConf = hostNation?.conf
+
+  // Build team objects (32) with host & confederation stat bonuses
+  S.teams = shuffle(qualified.slice(0, 32)).map(nation => {
+    const isHost = nation.name === S.hostNation
+    const sameConf = !isHost && nation.conf === hostConf
+    // Host +8 to all stats, same-confederation +4
+    const bonus = isHost ? 8 : sameConf ? 4 : 0
+    const baseStats = nation.stats || rollStats(nation.tier || 'rest')
+    const stats = bonus ? {
+      attack: baseStats.attack + bonus, defense: baseStats.defense + bonus,
+      stamina: baseStats.stamina + bonus, mental: baseStats.mental + bonus,
+      setPieces: baseStats.setPieces + bonus,
+    } : baseStats
+    const rating = seasonRating(nation) + bonus
     return {
       name: nation.name, cc: nation.cc, conf: nation.conf,
       tier: nation.tier || 'rest',
-      stats: nation.stats || rollStats(nation.tier || 'rest'),
-      rating,
+      stats, rating,
       stars: linkStarsToTeam(nation),
       soul: getSoul(nation.name),
-      isHost: nation.name === S.hostNation,
+      isHost, hostConfBonus: sameConf,
       mentalityDelta: 0,
       w:0, d:0, l:0, gf:0, ga:0, pts:0,
     }
@@ -133,13 +146,13 @@ export function runQualification() {
   addStory('🏟️', `${S.hostNation} host World Cup #${S.wcNumber}.`)
 }
 
-// ── Draw 12 groups of 4 ───────────────────────────────────────
+// ── Draw 8 groups of 4 ────────────────────────────────────────
 export function drawGroups() {
   const sorted = [...S.teams].sort((a, b) => b.rating - a.rating)
-  const pot1 = sorted.slice(0, 12)  // top 12 seeded
-  const rest = shuffle(sorted.slice(12))
+  const pot1 = sorted.slice(0, 8)   // top 8 seeded, one per group
+  const rest = shuffle(sorted.slice(8))
 
-  S.groups = Array.from({ length: 12 }, (_, i) => ({
+  S.groups = Array.from({ length: 8 }, (_, i) => ({
     id: String.fromCharCode(65 + i),
     teams: [pot1[i]]
   }))
@@ -148,7 +161,7 @@ export function drawGroups() {
   for (const team of rest) {
     const eligible = S.groups.filter(g => {
       if (g.teams.length >= 4) return false
-      return !g.teams.some(t => t.cc === team.cc)
+      return !g.teams.some(t => t.conf === team.conf)
     })
     const fallback = S.groups.filter(g => g.teams.length < 4)
     const target = eligible.length
@@ -202,7 +215,11 @@ function trackStats(r, phase, gi) {
   S.teamGoals[r.t2.name] = (S.teamGoals[r.t2.name]||0) + r.g2
   S.teamGoalsConceded[r.t1.name] = (S.teamGoalsConceded[r.t1.name]||0) + r.g2
   S.teamGoalsConceded[r.t2.name] = (S.teamGoalsConceded[r.t2.name]||0) + r.g1
-  ;[r.t1, r.t2].forEach(t => (t.stars||[]).forEach(s => { if (s.goals) S.scorers[s.name]=(S.scorers[s.name]||0)+s.goals }))
+  // Count goals scored THIS match only (timeline holds per-match goal events).
+  // Using s.goals here would double-count since it's a cumulative total.
+  ;(r.timeline || []).forEach(ev => {
+    if (ev.isStar && ev.scorerName) S.scorers[ev.scorerName] = (S.scorers[ev.scorerName]||0) + 1
+  })
   // Track shots and possession per team for Tournament stats
   const m1 = S.teams?.find(t=>t.name===r.t1.name), m2 = S.teams?.find(t=>t.name===r.t2.name)
   if (m1) { m1.totalShots=(m1.totalShots||0)+(r.shots1||0); m1.avgPoss=((m1.avgPoss||0)+r.possession1)/((m1.matchCount||0)+1); m1.matchCount=(m1.matchCount||0)+1 }
@@ -221,21 +238,15 @@ export function groupStandings(grp) {
     (b.pts||0)-(a.pts||0) || (b.gd||0)-(a.gd||0) || (b.gf||0)-(a.gf||0))
 }
 
-// ── Build knockout (top 2 from each group = 24 teams → R24) ──
+// ── Build knockout (top 2 from each of 8 groups = 16 → R16) ──
 export function buildKnockout() {
-  // 12 groups → top 2 (24) + 8 best third-placed = 32 teams
-  const top2 = [], thirds = []
+  const winners = [], runners = []
   S.groups.forEach(grp => {
     const standings = groupStandings(grp)
-    standings.slice(0, 2).forEach(t => { top2.push(t); S.roundReached[t.name] = 'Round of 32' })
-    if (standings[2]) thirds.push(standings[2])
-    standings.slice(3).forEach(t => { S.roundReached[t.name] = 'Group' })
+    if (standings[0]) { winners.push({ team: standings[0], gi: grp.id }); S.roundReached[standings[0].name] = 'Round of 16' }
+    if (standings[1]) { runners.push({ team: standings[1], gi: grp.id }); S.roundReached[standings[1].name] = 'Round of 16' }
+    standings.slice(2).forEach(t => { S.roundReached[t.name] = 'Group' })
   })
-  // Best 8 third-placed teams by points/GD/GF
-  thirds.sort((a,b) => (b.pts||0)-(a.pts||0) || (b.gd||0)-(a.gd||0) || (b.gf||0)-(a.gf||0))
-  const bestThirds = thirds.slice(0, 8)
-  bestThirds.forEach(t => S.roundReached[t.name] = 'Round of 32')
-  thirds.slice(8).forEach(t => { if (!S.roundReached[t.name]) S.roundReached[t.name] = 'Group' })
 
   // ── Group-exit storylines ──
   S.teams.forEach(t => {
@@ -247,14 +258,18 @@ export function buildKnockout() {
     })
   })
 
-  // Seed: 32 teams, seed by rating so strong teams are spread out
-  const all32 = [...top2, ...bestThirds].sort((a,b) => b.rating - a.rating)
-  // Snake-pair: best vs worst
+  // Draw: each group winner gets a random runner-up from a DIFFERENT group.
+  const shuffledWinners = shuffle([...winners])
+  const availableRunners = shuffle([...runners])
   const matches = []
-  for (let i = 0; i < 16; i++) {
-    matches.push({ t1: all32[i], t2: all32[31 - i], played:false, result:null })
+  for (const w of shuffledWinners) {
+    // pick a runner-up not from the same group, if possible
+    let idx = availableRunners.findIndex(r => r.gi !== w.gi)
+    if (idx === -1) idx = 0
+    const r = availableRunners.splice(idx, 1)[0]
+    matches.push({ t1: w.team, t2: r.team, played:false, result:null })
   }
-  S.knockoutRounds = [{ name:'Round of 32', matches }]
+  S.knockoutRounds = [{ name:'Round of 16', matches }]
   autoSave()
 }
 
@@ -302,7 +317,13 @@ export function advanceKnockout() {
 }
 
 function finalizeWC() {
-  const famePts = { Winner:300, Final:150, 'Semi-finals':75, 'Quarter-finals':30, 'Round of 16':12, 'Round of 32':5, Group:0 }
+  const famePts = { Winner:300, Final:150, 'Semi-finals':75, 'Quarter-finals':30, 'Round of 16':12, Group:0 }
+  // Determine final standings: champion, runner-up (Final loser), 3rd/4th (SF losers)
+  const finishOrder = { Winner:6, Final:5, 'Semi-finals':4, 'Quarter-finals':3, 'Round of 16':2, Group:1 }
+  const rankByFinish = (S.teams || [])
+    .map(t => ({ name:t.name, cc:t.cc, reached:S.roundReached[t.name]||'Group',
+                 gd:(t.gf||0)-(t.ga||0), gf:t.gf||0 }))
+    .sort((a,b) => (finishOrder[b.reached]-finishOrder[a.reached]) || (b.gd-a.gd) || (b.gf-a.gf))
   let topScorer = null, topGoals = 0
   let offMVP = null, offRating = 0
   let defMVP = null, defRating = 0
@@ -355,14 +376,53 @@ function finalizeWC() {
     S.records.mostGoalsOneWC = { name:topScorer.name, team:topScorer.teamName, goals:topGoals, wc:S.wcNumber }
   }
 
+  // ── Per-team season records (for modals & team records page) ──
+  const teamSeasons = (S.teams || []).map(t => {
+    // games played this edition
+    const ko = (t.w||0)+(t.d||0)+(t.l||0) // group games tracked in w/d/l; add KO games below
+    let koGames = 0, koGf = 0, koGa = 0
+    ;(S.allMatchResults || []).forEach(m => {
+      if (m.phase !== 'knockout') return
+      if (m.t1name === t.name) { koGames++; koGf += m.g1; koGa += m.g2 }
+      else if (m.t2name === t.name) { koGames++; koGf += m.g2; koGa += m.g1 }
+    })
+    return {
+      name: t.name, cc: t.cc,
+      reached: S.roundReached[t.name] || 'Group',
+      games: ko + koGames,
+      gf: (t.gf||0) + koGf,
+      ga: (t.ga||0) + koGa,
+      w: t.w||0, d: t.d||0, l: t.l||0,
+    }
+  })
+
+  // ── Per-player season records (goals + games this edition) ──
+  const playerSeasons = []
+  ;(S.teams || []).forEach(t => (t.stars || []).forEach(s => {
+    const games = (s.ratings?.length) || 0
+    if (games > 0 || (S.scorers[s.name]||0) > 0) {
+      playerSeasons.push({
+        name: s.name, cc: t.cc, team: t.name, pos: s.pos, tier: s.tier,
+        goals: S.scorers[s.name] || 0, games,
+        reached: S.roundReached[t.name] || 'Group',
+      })
+    }
+  }))
+
   S.history = S.history || []
   S.history.push({
     wcNumber: S.wcNumber,
     champion: S.champion.name, cc: S.champion.cc,
+    runnerUp: rankByFinish[1] || null,
+    third: rankByFinish[2] || null,
+    fourth: rankByFinish[3] || null,
+    host: S.hostNation,
     roundReached: { ...S.roundReached },
     topScorers: Object.entries(S.scorers||{}).sort((a,b)=>b[1]-a[1]).slice(0,5),
     totalGoals: Object.values(S.teamGoals||{}).reduce((a,b)=>a+b,0),
-    awards: { ...S.seasonAwards }
+    awards: { ...S.seasonAwards },
+    teamSeasons,
+    playerSeasons,
   })
   autoSave()
 }

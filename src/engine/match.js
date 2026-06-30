@@ -219,7 +219,9 @@ function applyStarEffects(stars, myG, oppG, myName, effects) {
   if (topAttacker) {
     const goals = rollGoalDist(topAttacker)
     if (goals > 0) {
-      topAttacker.goals = (topAttacker.goals || 0) + goals
+      // Track intended match goals for timeline attribution priority.
+      // Cumulative s.goals is set later from the actual (capped) timeline.
+      topAttacker._matchGoals = (topAttacker._matchGoals || 0) + goals
       myG += goals
       const labels = ['','scores','scores a brace','hat-trick!','4 goals!!']
       effects.push(`⭐ ${topAttacker.name} ${labels[goals] || `scores ${goals}`} for ${myName}!`)
@@ -304,6 +306,9 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   const e2 = getEffStats(t2, isKO)
   const effects = []
 
+  // Reset per-match goal counters (used for accurate timeline attribution)
+  ;[...(t1.stars||[]), ...(t2.stars||[])].forEach(s => { if (s) s._matchGoals = 0 })
+
   // Stage 1: match stats
   const m1 = computeMatchStats(e1, e2)
   const m2 = computeMatchStats(e2, e1)
@@ -358,7 +363,21 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
     }
   } else { winner = g1 > g2 ? t1 : g2 > g1 ? t2 : null }
 
-  // Stage 7: star match ratings
+  // Build goal timeline with star attribution (uses this match's intended goals)
+  const timeline = buildTimeline(t1, g1, t2, g2, e1.stamina, e2.stamina, stars1, stars2)
+
+  // Tally each star's ACTUAL goals this match from the (post-cap) timeline,
+  // then fold into cumulative totals. Player stats and Golden Boot stay in sync.
+  const matchGoalsByName = {}
+  timeline.forEach(ev => { if (ev.isStar) matchGoalsByName[ev.scorerName] = (matchGoalsByName[ev.scorerName]||0)+1 })
+  ;[...stars1, ...stars2].forEach(s => {
+    if (!s) return
+    const mg = matchGoalsByName[s.name] || 0
+    s._matchGoals = mg
+    s.goals = (s.goals || 0) + mg
+  })
+
+  // Stage 7: star match ratings (uses this match's goals)
   const starRatings = { team1:[], team2:[] }
   ;[t1, t2].forEach((t, ti) => {
     const myG = ti===0?g1:g2, oppG = ti===0?g2:g1
@@ -367,15 +386,12 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
     const myEff = ti===0?e1:e2, oppEff = ti===0?e2:e1
     ;(t.stars || []).forEach(s => {
       if (!s) return
-      const r = calcStarRating(s.pos, s.tier, myG, oppG, myShots, oppShots, poss, s.goals||0, ovr(myEff), ovr(oppEff))
+      const r = calcStarRating(s.pos, s.tier, myG, oppG, myShots, oppShots, poss, s._matchGoals||0, ovr(myEff), ovr(oppEff))
       if (!s.ratings) s.ratings = []
       s.ratings.push(r)
-      starRatings[`team${ti+1}`].push({ name:s.name, pos:s.pos, tier:s.tier, rating:r, goals:s.goals||0 })
+      starRatings[`team${ti+1}`].push({ name:s.name, pos:s.pos, tier:s.tier, rating:r, goals:s._matchGoals||0 })
     })
   })
-
-  // Build goal timeline with star attribution
-  const timeline = buildTimeline(t1, g1, t2, g2, e1.stamina, e2.stamina, stars1, stars2)
 
   // Build 6 × 15-min tranches
   const MINUTES = [15, 30, 45, 60, 75, 90]
@@ -403,10 +419,10 @@ function buildTimeline(t1, g1, t2, g2, stam1, stam2, stars1 = [], stars2 = []) {
     const shift = ((clamp(stam,40,110) - 75) / 35) * 12
     return clamp(Math.round(45 + shift + gaussRand(20)), 1, 90)
   }
-  // Attribute goals: try to give star credit where they scored
+  // Attribute goals using THIS match's goals (not cumulative career totals)
   const starGoalCounts1 = new Map(), starGoalCounts2 = new Map()
-  ;[...stars1].forEach(s => { if ((s.goals||0) > 0) starGoalCounts1.set(s, s.goals) })
-  ;[...stars2].forEach(s => { if ((s.goals||0) > 0) starGoalCounts2.set(s, s.goals) })
+  ;[...stars1].forEach(s => { if ((s._matchGoals||0) > 0) starGoalCounts1.set(s, s._matchGoals) })
+  ;[...stars2].forEach(s => { if ((s._matchGoals||0) > 0) starGoalCounts2.set(s, s._matchGoals) })
 
   for (let i = 0; i < g1; i++) {
     // Find a star with remaining goal credit

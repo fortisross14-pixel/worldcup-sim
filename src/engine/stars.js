@@ -7,8 +7,8 @@ export const TIER_LABELS = {
   rare:'Rare', uncommon:'Uncommon', common:'Common'
 }
 export const TIER_COLORS = {
-  generational:'#ff6b35', legendary:'#f0c040', epic:'#9c27b0',
-  rare:'#2196f3', uncommon:'#4caf50', common:'#6a7a9a'
+  generational:'#ff3b6b', legendary:'#ffcb2b', epic:'#7b5cff',
+  rare:'#21e6c1', uncommon:'#3ad17e', common:'#8a85a3'
 }
 export const TIER_ORDER = ['generational','legendary','epic','rare','uncommon','common']
 

@@ -134,9 +134,10 @@ export const ALL_NATIONS = [
   { name:'Solomon Islands', cc:'sb', conf:'OFC', tier:'rest', base:52, hist:1 },
 ]
 
-// Confederation qualification slots (48-team WC format)
+// Confederation qualification slots (32-team WC format)
+// 12 UEFA + 5 CONMEBOL + 6 CAF + 5 AFC + 3 CONCACAF + 1 OFC = 32 (host takes a slot from its own conf)
 export const CONF_SLOTS = {
-  UEFA: 16, CONMEBOL: 6, CONCACAF: 6, CAF: 9, AFC: 8, OFC: 1, HOST: 1
+  UEFA: 12, CONMEBOL: 5, CAF: 6, AFC: 5, CONCACAF: 3, OFC: 1
 }
 
 // ── National colors (primary, secondary) for UI theming ──────

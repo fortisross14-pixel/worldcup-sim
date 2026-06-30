@@ -87,7 +87,7 @@ function playNextGroup() {
   if (!unplayed.length) {
     buildKnockout(); S.phase = 'knockout'
     autoSave(); updatePhaseUI(); switchTab('bracket')
-    toast('Group stage done — Round of 32!'); return
+    toast('Group stage done — Round of 16!'); return
   }
   const match = unplayed[0]
   showMatchPreview(match.t1, match.t2, 'Group Stage', () => {
@@ -139,74 +139,72 @@ function showMatchPreview(t1, t2, roundName, onStart) {
   const popup = $('match-popup'), inner = $('match-popup-inner')
   popup.classList.add('match-popup-modal')
   popup.style.display = 'flex'
+  const [h1,h2] = natColors(t1.cc), [a1,a2] = natColors(t2.cc)
 
-  const teamBlock = (team, side) => {
+  const teamDetail = (team, side) => {
     const stars = team.stars || []
     const e = getEffStats(team, false)
-    const o = Math.round((e.attack+e.defense+e.stamina+e.mental+e.setPieces)/5)
-    const games = (team.w||0)+(team.d||0)+(team.l||0)
     const soul = team.soul || getSoul(team.name)
     return `
-      <div class="preview-team ${side}">
-        <div class="preview-team-head">
-          <span class="preview-team-flag">${flag(team.cc)}</span>
-          <span class="preview-team-name">${team.name}</span>
-          <span class="preview-team-ovr">OVR ${o}</span>
+      <div>
+        <div class="pv-block-head">Form</div>
+        <div class="pv-statgrid">
+          <div class="pv-stat"><span class="pl">ATT</span><span class="pv">${e.attack}</span></div>
+          <div class="pv-stat"><span class="pl">DEF</span><span class="pv">${e.defense}</span></div>
+          <div class="pv-stat"><span class="pl">STA</span><span class="pv">${e.stamina}</span></div>
+          <div class="pv-stat"><span class="pl">MEN</span><span class="pv">${e.mental}</span></div>
+          <div class="pv-stat"><span class="pl">SET</span><span class="pv">${e.setPieces}</span></div>
         </div>
-        <div class="preview-stat-grid">
-          <div><span class="preview-stat-label">ATT</span><span>${e.attack}</span></div>
-          <div><span class="preview-stat-label">DEF</span><span>${e.defense}</span></div>
-          <div><span class="preview-stat-label">STA</span><span>${e.stamina}</span></div>
-          <div><span class="preview-stat-label">MEN</span><span>${e.mental}</span></div>
-          <div><span class="preview-stat-label">SET</span><span>${e.setPieces}</span></div>
-        </div>
-        <div class="preview-form-row">
-          <div><span class="preview-stat-label">G</span>${games}</div>
-          <div><span class="preview-stat-label">W</span><span style="color:var(--green)">${team.w||0}</span></div>
-          <div><span class="preview-stat-label">D</span>${team.d||0}</div>
-          <div><span class="preview-stat-label">L</span><span style="color:var(--red)">${team.l||0}</span></div>
-          <div><span class="preview-stat-label">GF</span>${team.gf||0}</div>
-          <div><span class="preview-stat-label">GA</span>${team.ga||0}</div>
-        </div>
-        ${soul ? `<div class="preview-section-label">SOUL</div>
-          <div class="preview-soul-row">
-            <span class="preview-soul-name">🎭 ${soul.name}</span>
-            <span class="preview-soul-desc">${soul.desc}</span>
-          </div>` : ''}
-        <div class="preview-section-label">STARS (${stars.length})</div>
-        ${stars.length ? stars.map(s => `
-          <div class="preview-star-row" style="color:${tierColor(s.tier)}">
-            <span class="badge badge-${s.tier}">${s.pos}</span>
-            <span class="preview-star-name">${s.name}</span>
-            <span class="muted" style="font-size:10px">${TIER_LABELS[s.tier]||s.tier}</span>
-          </div>`).join('') : '<div class="muted" style="font-size:11px">No stars</div>'}
-        ${team.mentalityDelta ? `<div style="font-size:11px;margin-top:6px;color:${team.mentalityDelta>0?'var(--green)':'var(--red)'}">Morale ${team.mentalityDelta>0?'▲':'▼'}${Math.abs(team.mentalityDelta)}</div>` : ''}
+        ${(team.w||team.d||team.l)?`<div style="font-family:var(--font-body);font-size:11px;color:var(--dim);margin-bottom:8px">${team.w||0}W ${team.d||0}D ${team.l||0}L · GF ${team.gf||0} · GA ${team.ga||0}</div>`:''}
+        ${soul?`<div class="pv-soul"><span class="pv-soul-nm">🎭 ${soul.name}</span><span class="pv-soul-desc">${soul.desc}</span></div>`:''}
+        <div class="pv-block-head">Stars</div>
+        ${stars.length?stars.map(s=>`<div class="scard ${side}" style="margin-bottom:6px">
+          <span class="badge badge-${s.tier}">${s.pos}</span>
+          <span class="sinfo"><span class="snm">${s.name}</span><span class="smeta">${TIER_LABELS[s.tier]||s.tier}</span></span>
+        </div>`).join(''):'<div style="font-size:11px;color:var(--dim)">No stars</div>'}
       </div>`
   }
+
+  const e1=getEffStats(t1), e2=getEffStats(t2)
+  const o1=Math.round((e1.attack+e1.defense+e1.stamina+e1.mental+e1.setPieces)/5)
+  const o2=Math.round((e2.attack+e2.defense+e2.stamina+e2.mental+e2.setPieces)/5)
 
   const isGroup = S.phase === 'groups'
   const nextMatch = isGroup ? S.groupMatches.find(m => !m.played) : null
   const groupLeft = nextMatch ? S.groupMatches.filter(m => !m.played && m.gi === nextMatch.gi).length : 0
-
   const skipButtons = isGroup
-    ? `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip Game ⏭</button>
-       <button class="btn btn-secondary" onclick="window.skipPreviewedGroup()">Skip Group ⏭⏭ (${groupLeft})</button>`
-    : `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip Game ⏭</button>`
+    ? `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip ⏭</button>
+       <button class="btn btn-secondary" onclick="window.skipPreviewedGroup()">Group ⏭⏭(${groupLeft})</button>`
+    : `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip ⏭</button>`
 
   inner.innerHTML = `
-    <div class="playback-card preview-card">
-      <div class="playback-header">
-        <div class="playback-round">${roundName.toUpperCase()} — PREVIEW</div>
-        <button class="btn btn-icon btn-sm" onclick="window.cancelPreview()" style="font-size:14px">✕</button>
+    <div class="pb-card">
+      <div class="pb-top">
+        <div class="pb-round">${roundName} — Preview</div>
+        <button class="pb-close" onclick="window.cancelPreview()">✕</button>
       </div>
-      <div class="preview-grid">
-        ${teamBlock(t1, 'left')}
-        <div class="preview-vs">VS</div>
-        ${teamBlock(t2, 'right')}
+      <div class="versus compact">
+        <div class="vhalf home" style="--c1:${h1};--c2:${h2}">
+          <span class="vflag">${flag(t1.cc,30)}</span>
+          <span class="vname">${t1.name}</span>
+          <span class="vsub">OVR ${o1} · ${t1.conf||''}</span>
+        </div>
+        <div class="vhalf away" style="--c1:${a1};--c2:${a2}">
+          <span class="vflag">${flag(t2.cc,30)}</span>
+          <span class="vname">${t2.name}</span>
+          <span class="vsub">OVR ${o2} · ${t2.conf||''}</span>
+        </div>
+        <div class="score-coin"><div class="sc" style="font-size:20px">VS</div></div>
       </div>
-      <div class="playback-actions" style="flex-wrap:wrap;gap:8px">
+      <div class="pv-body">
+        <div class="pv-teams">
+          ${teamDetail(t1,'h')}
+          ${teamDetail(t2,'a')}
+        </div>
+      </div>
+      <div class="pb-acts" style="flex-wrap:wrap">
         ${skipButtons}
-        <button class="btn btn-primary" onclick="window.startPreviewedMatch()">▶ Simulate</button>
+        <button class="btn btn-primary" onclick="window.startPreviewedMatch()">▶ Play</button>
       </div>
     </div>`
 
@@ -289,56 +287,52 @@ function showGroupResultsPopup(results, roundName, onClose) {
 
   const render = () => {
     const r = results[selected]
+    const [h1,h2] = natColors(r.t1.cc), [a1,a2] = natColors(r.t2.cc)
     const tabs = results.length > 1 ? results.map((res, i) => `
-      <div class="group-result-tab ${i===selected?'active':''}" onclick="window._selectGroupResult(${i})">
-        <div class="group-result-tab-num">M${i+1}</div>
-        <div class="group-result-tab-score">${res.g1}–${res.g2}</div>
-        <div class="group-result-tab-winner">${(res.g1>res.g2?res.t1:res.g2>res.g1?res.t2:null)?.name?.slice(0,12)||'Draw'}</div>
+      <div class="gr-tab ${i===selected?'active':''}" onclick="window._selectGroupResult(${i})">
+        <div class="gr-tab-sc">${res.g1}–${res.g2}</div>
+        <div class="gr-tab-w">${(res.g1>res.g2?res.t1:res.g2>res.g1?res.t2:null)?.name?.slice(0,10)||'Draw'}</div>
       </div>`).join('') : ''
 
     const events = (r.timeline||[])
     inner.innerHTML = `
-      <div class="group-results-wrap">
-        ${results.length>1?`<div class="group-results-tabs">${tabs}</div>`:''}
-        <div class="group-results-detail">
-          <div class="playback-card group-result-card-inner">
-            <div class="playback-header">
-              <div class="playback-round">${roundName.toUpperCase()}${results.length>1?` · M${selected+1}/${results.length}`:''}</div>
-              <div class="playback-clock final">FT</div>
+      <div class="gr-wrap">
+        ${results.length>1?`<div class="gr-tabs">${tabs}</div>`:''}
+        <div class="gr-detail">
+          <div class="pb-card">
+            <div class="pb-top">
+              <div class="pb-round">${roundName}${results.length>1?` · ${selected+1}/${results.length}`:''}</div>
+              <div class="pb-clock final">FT</div>
             </div>
-            <div class="playback-score-row">
-              <div class="playback-team-block">
-                <div class="playback-team-stripe"></div>
-                <div class="playback-team-inner">
-                  <div class="playback-team-name">${flag(r.t1.cc)} ${r.t1.name}</div>
-                  ${(r.t1.stars||[]).map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
-                </div>
+            <div class="versus compact">
+              <div class="vhalf home" style="--c1:${h1};--c2:${h2}">
+                <span class="vflag">${flag(r.t1.cc,30)}</span>
+                <span class="vname">${r.t1.name}</span>
+                <span class="vsub">${r.t1.conf||''}</span>
               </div>
-              <div class="playback-score">
-                <span class="${r.g1>r.g2?'lead':''}">${r.g1}</span>
-                <span class="dash">–</span>
-                <span class="${r.g2>r.g1?'lead':''}">${r.g2}</span>
+              <div class="vhalf away" style="--c1:${a1};--c2:${a2}">
+                <span class="vflag">${flag(r.t2.cc,30)}</span>
+                <span class="vname">${r.t2.name}</span>
+                <span class="vsub">${r.t2.conf||''}</span>
               </div>
-              <div class="playback-team-block right">
-                <div class="playback-team-inner">
-                  <div class="playback-team-name">${r.t2.name} ${flag(r.t2.cc)}</div>
-                  ${(r.t2.stars||[]).map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
-                </div>
-                <div class="playback-team-stripe"></div>
+              <div class="score-coin ${r.penalties?'pens':''}">
+                <div class="sc"><b>${r.g1}</b><span class="dash">–</span>${r.g2}</div>
+                <div class="ft">${r.penalties?'PENS':'FT'}</div>
               </div>
             </div>
-            <div class="playback-events">
-              ${events.length===0?'<div class="playback-event muted">No goals.</div>':
-                events.map(ev=>`<div class="playback-event ${ev.team===1?'left':'right'} ${ev.isStar?'star':''}">
-                  <span class="event-min">${ev.minute}'</span>
-                  <span class="event-icon">⚽</span>
-                  <span class="event-name">${ev.scorerName}</span>
+            <div class="gticker">
+              <div class="gt-head">Goals</div>
+              ${events.length===0?'<div class="goal muted">No goals</div>':
+                events.map(ev=>`<div class="goal ${ev.team===1?'home':'away'}" style="--gline-h:${h1};--gline-a:${a1}">
+                  <span class="gmin">${ev.minute}</span>
+                  <span class="gscorer ${ev.isStar?'star':''}">${ev.scorerName}</span>
+                  <span class="gteam">${ev.team===1?r.t1.name.slice(0,3).toUpperCase():r.t2.name.slice(0,3).toUpperCase()}</span>
                 </div>`).join('')}
             </div>
             ${renderFinalSummary(r)}
-          </div>
-          <div class="playback-actions" style="margin-top:8px">
-            <button class="btn btn-primary" onclick="window._closeGroupResults()">Continue ▶</button>
+            <div class="pb-acts">
+              <button class="btn btn-primary" onclick="window._closeGroupResults()">Continue ▶</button>
+            </div>
           </div>
         </div>
       </div>`
@@ -365,54 +359,47 @@ function showMatchPopup(r, roundName, onClose) {
   if (_playbackTimer) { clearTimeout(_playbackTimer); _playbackTimer = null }
 
   const t1 = r.t1, t2 = r.t2
-  const stars1 = t1.stars || [], stars2 = t2.stars || []
-
+  const [h1,h2] = natColors(t1.cc), [a1,a2] = natColors(t2.cc)
   const isFinal = roundName === 'Final'
+
   function renderFrame(minute, score1, score2, events, finished) {
-    const skipBtn  = finished ? '' : `<button class="btn btn-sm" onclick="window.skipPlayback()">Skip ⏭</button>`
+    const skipBtn  = finished ? '' : `<button class="btn btn-secondary" onclick="window.skipPlayback()">Skip ⏭</button>`
     const closeBtn = finished ? `<button class="btn btn-primary" onclick="window.closePlayback()">Continue ▶</button>` : ''
     inner.innerHTML = `
-      <div class="playback-card ${isFinal?'final-theme':''}">
-        ${isFinal?'<div class="final-banner">🏆 WORLD CUP FINAL 🏆</div>':''}
-        <div class="playback-header">
-          <div class="playback-round">${isFinal?`WORLD CUP #${S.wcNumber}`:roundName.toUpperCase()}</div>
-          <div class="playback-clock ${finished?'final':''}">${finished?'FT':minute+"'"}</div>
+      <div class="pb-card">
+        <div class="pb-top">
+          <div class="pb-round">${isFinal?`🏆 World Cup #${S.wcNumber} Final`:roundName}</div>
+          <div class="pb-clock ${finished?'final':''}">${finished?'FT':minute+"'"}</div>
         </div>
-        <div class="playback-score-row">
-          <div class="playback-team-block">
-            <div class="playback-team-stripe"></div>
-            <div class="playback-team-inner">
-              <div class="playback-team-name">${flag(t1.cc)} ${t1.name}</div>
-              ${stars1.map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
-              ${t1.soul?`<div style="font-size:10px;color:var(--txt3);margin-top:2px">🎭 ${t1.soul.name}</div>`:''}
-            </div>
+        <div class="versus compact">
+          <div class="vhalf home" style="--c1:${h1};--c2:${h2}">
+            <span class="vflag">${flag(t1.cc,30)}</span>
+            <span class="vname">${t1.name}</span>
+            <span class="vsub">${t1.soul?'🎭 '+t1.soul.name:t1.conf||''}</span>
           </div>
-          <div class="playback-score">
-            <span class="${score1>score2?'lead':''}">${score1}</span>
-            <span class="dash">–</span>
-            <span class="${score2>score1?'lead':''}">${score2}</span>
+          <div class="vhalf away" style="--c1:${a1};--c2:${a2}">
+            <span class="vflag">${flag(t2.cc,30)}</span>
+            <span class="vname">${t2.name}</span>
+            <span class="vsub">${t2.soul?'🎭 '+t2.soul.name:t2.conf||''}</span>
           </div>
-          <div class="playback-team-block right">
-            <div class="playback-team-inner">
-              <div class="playback-team-name">${t2.name} ${flag(t2.cc)}</div>
-              ${stars2.map(s=>`<div class="playback-team-star" style="color:${tierColor(s.tier)}">⭐ ${s.name} (${s.pos})</div>`).join('')}
-              ${t2.soul?`<div style="font-size:10px;color:var(--txt3);margin-top:2px;text-align:right">🎭 ${t2.soul.name}</div>`:''}
-            </div>
-            <div class="playback-team-stripe"></div>
+          <div class="score-coin ${finished?(r.penalties?'pens':''):'live'}">
+            <div class="sc"><b>${score1}</b><span class="dash">–</span>${score2}</div>
+            <div class="ft">${finished?(r.penalties?'PENS':'FULL TIME'):minute+"'"}</div>
           </div>
         </div>
-        <div class="playback-progress-wrap"><div class="playback-progress" style="width:${Math.min(100,(minute/90)*100)}%"></div></div>
-        <div class="playback-events">
+        <div class="pb-prog"><div class="pb-prog-fill" style="width:${Math.min(100,(minute/90)*100)}%"></div></div>
+        <div class="gticker">
+          <div class="gt-head">Goals</div>
           ${events.length===0
-            ? `<div class="playback-event muted">${finished?'No goals.':'Kick off…'}</div>`
-            : events.map(ev=>`<div class="playback-event ${ev.team===1?'left':'right'} ${ev.isStar?'star':''}">
-                <span class="event-min">${ev.minute}'</span>
-                <span class="event-icon">⚽</span>
-                <span class="event-name">${ev.scorerName}</span>
+            ? `<div class="goal muted">${finished?'No goals':'Kick off…'}</div>`
+            : events.map(ev=>`<div class="goal ${ev.team===1?'home':'away'}" style="--gline-h:${h1};--gline-a:${a1}">
+                <span class="gmin">${ev.minute}</span>
+                <span class="gscorer ${ev.isStar?'star':''}">${ev.scorerName}</span>
+                <span class="gteam">${ev.team===1?t1.name.slice(0,3).toUpperCase():t2.name.slice(0,3).toUpperCase()}</span>
               </div>`).join('')}
         </div>
         ${finished ? renderFinalSummary(r) : ''}
-        <div class="playback-actions">${skipBtn}${closeBtn}</div>
+        <div class="pb-acts">${skipBtn}${closeBtn}</div>
       </div>`
   }
 
@@ -443,34 +430,43 @@ function showMatchPopup(r, roundName, onClose) {
 
 function renderFinalSummary(r) {
   const sr1 = r.starRatings?.team1 || [], sr2 = r.starRatings?.team2 || []
+  const [h1] = natColors(r.t1.cc), [a1] = natColors(r.t2.cc)
   const starGoals1 = {}, starGoals2 = {}
   ;(r.timeline||[]).forEach(g => { if (!g.isStar) return; const m=g.team===1?starGoals1:starGoals2; m[g.scorerName]=(m[g.scorerName]||0)+1 })
+  const rc = v => !v?'r-cream':v>=8.5?'r-gold':v>=7.5?'r-green':v>=6.0?'r-cream':'r-red'
 
-  const starsBlock = (label, srList, goalsMap) => !srList.length?'':`
-    <div class="playback-team-block">
-      <div class="playback-block-label">${label}</div>
-      ${srList.map(s=>`<div class="playback-star-row" style="color:${tierColor(s.tier)}">
-        <span class="star-name">⭐ ${s.name}</span>
-        <span class="muted">${s.pos}${(goalsMap[s.name]||0)>0?` · ${goalsMap[s.name]}⚽`:''}</span>
-        <span class="rating-val ${ratingClass(s.rating)}">${s.rating?.toFixed(1)||'—'}</span>
-      </div>`).join('')}
+  const statBar = (label, v1, v2, suffix='') => {
+    const t = (v1+v2)||1
+    return `<div class="pb-stat">
+      <div class="pb-stat-row"><span class="v h">${v1}${suffix}</span><span class="lab">${label}</span><span class="v a">${v2}${suffix}</span></div>
+      <div class="pb-bar" style="--bar-h:${h1};--bar-a:${a1}"><div class="bh" style="width:${v1/t*100}%"></div><div class="ba" style="width:${v2/t*100}%"></div></div>
     </div>`
+  }
+  const starCard = (s, side, goalsMap) => `<div class="scard ${side}">
+    <span class="spos">${s.pos}</span>
+    <span class="sinfo"><span class="snm">${s.name}</span><span class="smeta">${(goalsMap[s.name]||0)>0?goalsMap[s.name]+'⚽ · ':''}${TIER_LABELS[s.tier]||s.tier}</span></span>
+    <span class="srate ${rc(s.rating)}">${s.rating?.toFixed(1)||'—'}</span>
+  </div>`
 
   return `
-    <div class="playback-stats-grid">
-      <div class="stat-cell stat-team-l">${r.t1.name}</div><div class="stat-cell stat-label">SHOTS</div><div class="stat-cell stat-team-r">${r.t2.name}</div>
-      <div class="stat-cell stat-num">${r.shots1}</div><div class="stat-cell"></div><div class="stat-cell stat-num">${r.shots2}</div>
-      <div class="stat-cell stat-num">${r.corners1}</div><div class="stat-cell stat-label">CORNERS</div><div class="stat-cell stat-num">${r.corners2}</div>
-      <div class="stat-cell stat-num">${r.possession1}%</div><div class="stat-cell stat-label">POSS</div><div class="stat-cell stat-num">${r.possession2}%</div>
+    <div class="pb-stats">
+      ${statBar('Shots', r.shots1, r.shots2)}
+      ${statBar('Corners', r.corners1, r.corners2)}
+      ${statBar('Possession', r.possession1, r.possession2, '%')}
     </div>
-    <div class="playback-pair">
-      ${starsBlock('STARS — '+r.t1.name.toUpperCase(), sr1, starGoals1)}
-      ${starsBlock('STARS — '+r.t2.name.toUpperCase(), sr2, starGoals2)}
+    <div class="pb-stars">
+      <div class="scols">
+        <div>
+          <div class="scol-head">${flag(r.t1.cc,16)} ${r.t1.name}</div>
+          ${sr1.map(s=>starCard(s,'h',starGoals1)).join('')}
+        </div>
+        <div>
+          <div class="scol-head">${flag(r.t2.cc,16)} ${r.t2.name}</div>
+          ${sr2.map(s=>starCard(s,'a',starGoals2)).join('')}
+        </div>
+      </div>
     </div>
-    ${r.effects?.length?`<div class="playback-effects">${r.effects.map(e=>`<div class="effect-line ${e.includes('⭐')?'star':''}">${e}</div>`).join('')}</div>`:''}
-    ${r.mentalityChanges?`<div style="font-size:10px;color:var(--txt3);padding:4px 0;text-align:center">
-      Morale: ${r.t1.name} ${r.mentalityChanges.team1.change>0?'▲':'▼'}${Math.abs(r.mentalityChanges.team1.change)} · ${r.t2.name} ${r.mentalityChanges.team2.change>0?'▲':'▼'}${Math.abs(r.mentalityChanges.team2.change)}
-    </div>`:''}
+    ${r.effects?.length?`<div class="pb-effects">${r.effects.map(e=>`<div class="effect-line ${e.includes('⭐')?'star':''}">${e}</div>`).join('')}</div>`:''}
   `
 }
 
@@ -682,7 +678,7 @@ function renderPlay() {
   if (!S.teams?.length) {
     el.innerHTML = `<div style="text-align:center;padding:48px 16px">
       <div style="font-size:64px;margin-bottom:12px">⚽</div>
-      <div style="font-family:var(--font-head);font-size:36px;letter-spacing:.12em;color:var(--gold2)">WORLD CUP SIMULATOR</div>
+      <div class="hero-title"><span class="l1">WORLD</span> <span class="l2">CUP</span></div>
       <div style="color:var(--txt2);margin:8px 0 24px">48 nations. 3 stars each. One champion.</div>
       <button class="btn btn-primary" onclick="handleMain()" style="padding:12px 32px;font-size:15px">▶ Begin World Cup ${S.wcNumber||1}</button>
     </div>`
@@ -820,7 +816,7 @@ function renderGroups() {
 // ── BRACKET tab ───────────────────────────────────────────────
 function renderBracket() {
   const el = $('tab-bracket'); if(!el||!S.knockoutRounds?.length){if(el)el.innerHTML='<div class="empty">Knockout not started</div>';return}
-  const roundOrder = ['Round of 32','Round of 16','Quarter-finals','Semi-finals','Final']
+  const roundOrder = ['Round of 16','Quarter-finals','Semi-finals','Final']
   const roundMap = {}
   S.knockoutRounds.forEach(r => { roundMap[r.name]=r })
   let html='<div class="bracket-scroll"><div class="bracket-rounds">'
@@ -830,18 +826,19 @@ function renderBracket() {
     if (round) {
       round.matches.forEach(m=>{
         const w=m.result?.winner
+        const c1 = m.t1?natColors(m.t1.cc):['#444','#222'], c2 = m.t2?natColors(m.t2.cc):['#444','#222']
         html+=`<div class="bracket-match">
-          <div class="bracket-team ${w?w===m.t1?'winner':'loser':''} ${!m.t1?'tbd':''}">${m.t1?`${flag(m.t1.cc)} ${m.t1.name}`:'-'}${m.result?`<span class="bracket-score">${m.result.g1}</span>`:''}</div>
-          <div class="bracket-team ${w?w===m.t2?'winner':'loser':''} ${!m.t2?'tbd':''}">${m.t2?`${flag(m.t2.cc)} ${m.t2.name}`:'-'}${m.result?`<span class="bracket-score">${m.result.g2}</span>`:''}</div>
+          <div class="bracket-team ${w?w===m.t1?'winner':'loser':''} ${!m.t1?'tbd':''}" style="--c1:${c1[0]};--c2:${c1[1]}">${m.t1?`<span class="bt-stripe"></span>${flag(m.t1.cc,16)}<span class="bt-name">${m.t1.name}</span>`:'<span class="bt-name">-</span>'}${m.result?`<span class="bracket-score">${m.result.g1}</span>`:''}</div>
+          <div class="bracket-team ${w?w===m.t2?'winner':'loser':''} ${!m.t2?'tbd':''}" style="--c1:${c2[0]};--c2:${c2[1]}">${m.t2?`<span class="bt-stripe"></span>${flag(m.t2.cc,16)}<span class="bt-name">${m.t2.name}</span>`:'<span class="bt-name">-</span>'}${m.result?`<span class="bracket-score">${m.result.g2}</span>`:''}</div>
         </div>`
       })
     } else {
-      const slots = { 'Round of 32':16, 'Round of 16':8, 'Quarter-finals':4, 'Semi-finals':2, 'Final':1 }[name] || 1
-      for(let i=0;i<slots;i++) html+=`<div class="bracket-match"><div class="bracket-team tbd">TBD</div><div class="bracket-team tbd">TBD</div></div>`
+      const slots = { 'Round of 16':8, 'Quarter-finals':4, 'Semi-finals':2, 'Final':1 }[name] || 1
+      for(let i=0;i<slots;i++) html+=`<div class="bracket-match"><div class="bracket-team tbd"><span class="bt-name">TBD</span></div><div class="bracket-team tbd"><span class="bt-name">TBD</span></div></div>`
     }
     html+='</div>'
   })
-  if (S.champion) html+=`<div class="bracket-col"><div class="bracket-round-name">CHAMPION</div><div class="bracket-match" style="border:1px solid var(--gold)"><div class="bracket-team winner" style="color:var(--gold);padding:10px">🏆 ${flag(S.champion.cc)} ${S.champion.name}</div></div></div>`
+  if (S.champion) html+=`<div class="bracket-col"><div class="bracket-round-name">CHAMPION</div><div class="bracket-match bracket-champ"><div class="bracket-team">🏆 ${flag(S.champion.cc,18)} ${S.champion.name}</div></div></div>`
   html+='</div></div>'
   el.innerHTML=html
 }
@@ -897,29 +894,61 @@ window.openStarModal = function(starId, teamName) {
   const star = (nation?.stars||[]).find(s=>s.id===starId)
   if (!star) return
   const avgR = star.allTimeRatings?.length ? (star.allTimeRatings.reduce((a,b)=>a+b,0)/star.allTimeRatings.length).toFixed(1) : '—'
+  const [c1,c2] = natColors(star.cc)
+
+  // Per-edition history from playerSeasons
+  const hist = S.history || []
+  const seasons = []
+  let totEd=0, totGames=0, totGoals=0
+  hist.forEach(h => {
+    const ps = (h.playerSeasons||[]).find(x=>x.name===star.name && x.team===teamName)
+    if (ps) {
+      totEd++; totGames+=ps.games||0; totGoals+=ps.goals||0
+      seasons.push({ wc:h.wcNumber, reached:ps.reached, games:ps.games||0, goals:ps.goals||0 })
+    }
+  })
+  const finishLabel = r => ({Winner:'🏆 Champion',Final:'🥈 Final','Semi-finals':'🥉 Semi','Quarter-finals':'QF','Round of 16':'R16',Group:'Groups'})[r]||r
+  const finishColor = r => r==='Winner'?'var(--gold)':r==='Final'?'#c0c0c0':r==='Semi-finals'?'#cd7f32':'var(--txt2)'
+
   $('team-modal-content').innerHTML = `
-    <div class="row" style="margin-bottom:12px">
-      <div style="font-size:28px">${flag(star.cc)}</div>
-      <div style="flex:1">
-        <div style="font-family:var(--font-head);font-size:20px;color:var(--txt)">${star.name}</div>
-        <div style="font-size:12px;color:var(--txt2)">${star.pos} · ${teamName}</div>
+    <div class="team-modal-hero" style="--c1:${c1};--c2:${c2}">
+      <div style="font-size:36px">${flag(star.cc,30)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="tmh-name" style="font-size:20px">${star.name}</div>
+        <div class="tmh-sub">${star.pos} · ${teamName} · ${TIER_LABELS[star.tier]||star.tier}</div>
       </div>
-      ${tierBadge(star.tier)}
-      <button class="btn btn-icon" onclick="closeTeamModal()" style="margin-left:4px">✕</button>
+      <button class="pb-close" onclick="closeTeamModal()" style="color:#fff">✕</button>
     </div>
+    <div class="modal-pad">
+
     <div class="sec">CAREER</div>
-    <div class="card" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
-      <div><div style="font-family:var(--font-head);font-size:20px;color:var(--gold2)">${star.goals||0}</div><div style="font-size:10px;color:var(--txt3)">GOALS</div></div>
-      <div><div style="font-family:var(--font-head);font-size:20px">${avgR}</div><div style="font-size:10px;color:var(--txt3)">AVG RATING</div></div>
-      <div><div style="font-family:var(--font-head);font-size:20px">${star.wcsRemaining||0}</div><div style="font-size:10px;color:var(--txt3)">WCS LEFT</div></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+      <div class="pv-stat"><span class="pl">GOALS</span><span class="pv" style="color:var(--hot)">${star.goals||0}</span></div>
+      <div class="pv-stat"><span class="pl">WCS</span><span class="pv">${totEd||star.wcsPlayed||0}</span></div>
+      <div class="pv-stat"><span class="pl">GAMES</span><span class="pv">${totGames}</span></div>
+      <div class="pv-stat"><span class="pl">AVG</span><span class="pv">${avgR}</span></div>
     </div>
+
     <div class="sec">MEDALS</div>
-    <div class="card" style="display:flex;gap:16px">
-      <div style="text-align:center"><div style="font-size:20px">🥇</div><div style="font-family:var(--font-head);font-size:16px;color:var(--gold2)">${star.medals?.gold||0}</div></div>
-      <div style="text-align:center"><div style="font-size:20px">🥈</div><div style="font-family:var(--font-head);font-size:16px">${star.medals?.silver||0}</div></div>
-      <div style="text-align:center"><div style="font-size:20px">🥉</div><div style="font-family:var(--font-head);font-size:16px">${star.medals?.bronze||0}</div></div>
-      <div style="text-align:center"><div style="font-size:20px">🏅</div><div style="font-family:var(--font-head);font-size:16px;color:var(--txt3)">${star.medals?.sf||0}</div></div>
+    <div class="card" style="display:flex;gap:18px;justify-content:space-around">
+      <div style="text-align:center"><div style="font-size:22px">🥇</div><div style="font-family:var(--font-pop);font-size:16px;color:var(--yolk)">${star.medals?.gold||0}</div></div>
+      <div style="text-align:center"><div style="font-size:22px">🥈</div><div style="font-family:var(--font-pop);font-size:16px">${star.medals?.silver||0}</div></div>
+      <div style="text-align:center"><div style="font-size:22px">🥉</div><div style="font-family:var(--font-pop);font-size:16px">${star.medals?.bronze||0}</div></div>
+      <div style="text-align:center"><div style="font-size:22px">⚡</div><div style="font-family:var(--font-pop);font-size:16px;color:var(--cyan)">${star.fame||0}</div></div>
     </div>
+
+    ${seasons.length?`
+    <div class="sec">EDITION BY EDITION</div>
+    <div class="table-wrap"><table class="data-table compact">
+      <thead><tr><th>WC</th><th>Result</th><th class="num">P</th><th class="num">⚽</th></tr></thead>
+      <tbody>${seasons.map(s=>`<tr>
+        <td style="color:var(--dim)">#${s.wc}</td>
+        <td style="color:${finishColor(s.reached)};font-weight:700;font-size:11px">${finishLabel(s.reached)}</td>
+        <td class="num">${s.games||'—'}</td>
+        <td class="num" style="color:var(--hot)">${s.goals||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`:'<div style="font-size:12px;color:var(--dim);margin-top:8px">No completed editions yet</div>'}
+
     <div class="sec">STAT BONUSES</div>
     ${Object.entries(star.statBonus||{}).filter(([,v])=>v>0).map(([k,v])=>`
       <div class="stat-row">
@@ -927,7 +956,7 @@ window.openStarModal = function(starId, teamName) {
         <div class="stat-bar-wrap"><div class="stat-bar" style="width:${Math.round(v/0.5)}%"></div></div>
         <span class="stat-val">+${v}</span>
       </div>`).join('')}
-    <div style="font-size:11px;color:var(--txt3);margin-top:8px">Effective bonus = +${Math.round(Object.values(star.statBonus||{}).reduce((a,b)=>a+(b||0),0) * (star.careerMult||1) * ({generational:3.5,legendary:2.5,epic:2.0,rare:1.5,uncommon:1.2,common:1.0}[star.tier]||1.0))} at current career stage</div>
+    </div>
   `
   $('team-modal-overlay').style.display='flex'
 }
@@ -974,16 +1003,17 @@ function renderNations() {
     </tr></thead>
     <tbody>${rows.map((r,i)=>{
       const {t,eff,o}=r, stars=t.stars||[]
+      const [c1,c2]=natColors(t.cc)
       return`<tr>
-        <td style="color:var(--txt3)">${i+1}</td>
-        <td class="c-name" onclick="openTeamModal('${t.name}')">${flag(t.cc)} <strong>${t.name}</strong>${t.isHost?' 🏠':''}</td>
-        <td><span style="font-size:10px;color:${t.tier==='top'?'var(--gold)':t.tier==='mid'?'var(--green)':'var(--txt3)'}">${t.tier?.toUpperCase()}</span></td>
-        <td class="num" style="color:var(--gold2)">${eff.attack}</td>
-        <td class="num" style="color:var(--gold2)">${eff.defense}</td>
-        <td class="num" style="color:var(--gold2)">${eff.stamina}</td>
-        <td class="num" style="color:var(--gold2)">${eff.mental}</td>
-        <td class="num" style="color:var(--gold2)">${eff.setPieces}</td>
-        <td class="num" style="color:var(--gold);font-family:var(--font-head);font-weight:700">${o}</td>
+        <td style="color:var(--dim)">${i+1}</td>
+        <td class="c-name" onclick="openTeamModal('${t.name}')" style="--c1:${c1};--c2:${c2}"><span class="nstripe"></span>${flag(t.cc,16)} <strong>${t.name}</strong>${t.isHost?' 🏠':''}</td>
+        <td><span style="font-size:10px;color:${t.tier==='top'?'var(--yolk)':t.tier==='mid'?'var(--green)':'var(--dim)'}">${t.tier?.toUpperCase()}</span></td>
+        <td class="num" style="color:var(--cyan)">${eff.attack}</td>
+        <td class="num" style="color:var(--cyan)">${eff.defense}</td>
+        <td class="num" style="color:var(--cyan)">${eff.stamina}</td>
+        <td class="num" style="color:var(--cyan)">${eff.mental}</td>
+        <td class="num" style="color:var(--cyan)">${eff.setPieces}</td>
+        <td class="num" style="color:var(--yolk);font-family:var(--font-pop)">${o}</td>
         <td>${stars.map(s=>`<span style="color:${tierColor(s.tier)};font-size:14px" title="${s.name} (${s.pos}·${TIER_LABELS[s.tier]})">⭐</span>`).join('')}</td>
       </tr>`}).join('')}
     </tbody></table></div>`
@@ -1011,33 +1041,58 @@ window.openTeamModal = function(teamName) {
   const semis   = hist.filter(h=>h.roundReached?.[teamName]==='Semi-finals').length
   const statNames = {attack:'Attack',defense:'Defense',stamina:'Stamina',mental:'Mental',setPieces:'Set Pieces'}
 
+  // Lifetime aggregates + per-edition rows from teamSeasons
+  const seasons = []
+  let totQual=0, totGames=0, totW=0, totGF=0, totGA=0
+  hist.forEach(h => {
+    const ts = (h.teamSeasons||[]).find(x=>x.name===teamName)
+    if (ts) {
+      totQual++; totGames+=ts.games||0; totW+=ts.w||0; totGF+=ts.gf||0; totGA+=ts.ga||0
+      seasons.push({ wc:h.wcNumber, reached:ts.reached, games:ts.games||0, gf:ts.gf||0, ga:ts.ga||0 })
+    } else {
+      seasons.push({ wc:h.wcNumber, reached:'DNQ', games:0, gf:0, ga:0 })
+    }
+  })
+  const finishLabel = r => ({Winner:'🏆 Champion',Final:'🥈 Final','Semi-finals':'🥉 Semi','Quarter-finals':'QF','Round of 16':'R16',Group:'Groups',DNQ:'DNQ'})[r]||r
+  const finishColor = r => r==='Winner'?'var(--gold)':r==='Final'?'#c0c0c0':r==='Semi-finals'?'#cd7f32':r==='DNQ'?'var(--red)':'var(--txt2)'
+
   $('team-modal-content').innerHTML = `
     <div class="team-modal-hero" style="--c1:${natColors(t.cc)[0]};--c2:${natColors(t.cc)[1]}">
       <div style="font-size:40px">${flag(t.cc,32)}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-family:var(--font-head);font-size:24px;color:#fff;letter-spacing:.03em;text-shadow:0 1px 4px rgba(0,0,0,.5)">${t.name}</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.85)">${t.tier?.toUpperCase()||''} · OVR ${o}${t.rating?` · Rating ${t.rating}`:''}</div>
+        <div class="tmh-name">${t.name}</div>
+        <div class="tmh-sub">${t.tier?.toUpperCase()||''} · OVR ${o}${t.rating?` · Rating ${t.rating}`:''}</div>
       </div>
-      <button class="btn btn-icon" onclick="closeTeamModal()" style="background:rgba(0,0,0,.3)">✕</button>
+      <button class="pb-close" onclick="closeTeamModal()" style="color:#fff">✕</button>
     </div>
-    <div style="padding:0 2px">
+    <div class="modal-pad">
 
     ${titles||finals||semis?`
-    <div class="sec">WORLD CUP HISTORY</div>
+    <div class="sec">HONOURS</div>
     <div class="row" style="gap:20px;margin-bottom:10px">
-      ${titles?`<div style="text-align:center"><div style="font-size:26px">🏆</div><div style="font-family:var(--font-head);font-size:22px;color:var(--gold2)">${titles}</div><div style="font-size:10px;color:var(--txt3)">TITLES</div></div>`:''}
-      ${finals?`<div style="text-align:center"><div style="font-size:26px">🥈</div><div style="font-family:var(--font-head);font-size:22px">${finals}</div><div style="font-size:10px;color:var(--txt3)">FINALS</div></div>`:''}
-      ${semis?`<div style="text-align:center"><div style="font-size:26px">🏅</div><div style="font-family:var(--font-head);font-size:22px">${semis}</div><div style="font-size:10px;color:var(--txt3)">SEMIS</div></div>`:''}
-    </div>`:'<div style="font-size:12px;color:var(--txt3);margin-bottom:10px">No WC history yet</div>'}
+      ${titles?`<div style="text-align:center"><div style="font-size:26px">🏆</div><div style="font-family:var(--font-pop);font-size:22px;color:var(--yolk)">${titles}</div><div style="font-size:10px;color:var(--dim)">TITLES</div></div>`:''}
+      ${finals?`<div style="text-align:center"><div style="font-size:26px">🥈</div><div style="font-family:var(--font-pop);font-size:22px">${finals}</div><div style="font-size:10px;color:var(--dim)">FINALS</div></div>`:''}
+      ${semis?`<div style="text-align:center"><div style="font-size:26px">🥉</div><div style="font-family:var(--font-pop);font-size:22px">${semis}</div><div style="font-size:10px;color:var(--dim)">SEMIS</div></div>`:''}
+    </div>`:''}
+
+    ${totQual?`
+    <div class="sec">ALL-TIME RECORD</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px">
+      <div class="pv-stat"><span class="pl">QUALIF</span><span class="pv">${totQual}</span></div>
+      <div class="pv-stat"><span class="pl">GAMES</span><span class="pv">${totGames}</span></div>
+      <div class="pv-stat"><span class="pl">WINS</span><span class="pv">${totW}</span></div>
+      <div class="pv-stat"><span class="pl">GF</span><span class="pv">${totGF}</span></div>
+      <div class="pv-stat"><span class="pl">GA</span><span class="pv">${totGA}</span></div>
+    </div>`:'<div style="font-size:12px;color:var(--dim);margin-bottom:10px">No World Cup history yet</div>'}
 
     ${t.soul || getSoul(t.name) ? `
     <div class="sec">NATIONAL SOUL</div>
-    <div class="card" style="border-left:3px solid var(--gold3)">
-      <div style="font-weight:700;font-size:14px;color:var(--gold2)">${(t.soul || getSoul(t.name)).name}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-top:3px">${(t.soul || getSoul(t.name)).desc}</div>
+    <div class="card" style="border-left:4px solid var(--grape)">
+      <div style="font-family:var(--font-pop);font-size:13px;color:var(--grape)">${(t.soul || getSoul(t.name)).name}</div>
+      <div style="font-size:12px;color:var(--chalk);margin-top:3px">${(t.soul || getSoul(t.name)).desc}</div>
     </div>`:''}
 
-    <div class="sec">STATS (effective incl. star bonuses + soul)</div>
+    <div class="sec">STATS</div>
     ${Object.entries(statNames).map(([k,label])=>{
       const bv=base[k]||75, ev=eff[k]||75, bonus=ev-bv
       return`<div class="stat-row">
@@ -1046,20 +1101,32 @@ window.openTeamModal = function(teamName) {
         <span class="stat-val">${ev}</span>
         <span class="stat-bonus">${bonus>0?`+${bonus}`:''}</span>
       </div>`}).join('')}
-    ${t.mentalityDelta?`<div style="font-size:11px;color:${t.mentalityDelta>0?'var(--green)':'var(--red)'};margin-top:4px">Morale: ${t.mentalityDelta>0?'+':''}${t.mentalityDelta}</div>`:''}
 
     <div class="sec">STARS (${stars.length})</div>
-    ${stars.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bg4)">
-      <div style="width:3px;height:36px;background:${tierColor(s.tier)};border-radius:2px;flex-shrink:0"></div>
+    ${stars.map(s=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)">
+      <div style="width:4px;height:36px;background:${tierColor(s.tier)};flex-shrink:0"></div>
       <div style="flex:1">
         <div style="font-weight:600;font-size:13px">${s.name}</div>
-        <div style="font-size:11px;color:var(--txt2)">${s.pos} · ${tierBadge(s.tier)} · ${s.wcsRemaining||0} WC${(s.wcsRemaining||0)!==1?'s':''} left</div>
-        <div style="font-size:10px;color:var(--txt3);margin-top:2px">⚽ ${s.goals||0} goals · ⚡ ${s.fame||0} fame</div>
+        <div style="font-size:11px;color:var(--chalk)">${s.pos} · ${tierBadge(s.tier)} · ${s.wcsRemaining||0} WC${(s.wcsRemaining||0)!==1?'s':''} left</div>
+        <div style="font-size:10px;color:var(--dim);margin-top:2px">⚽ ${s.goals||0} goals · ⚡ ${s.fame||0} fame</div>
       </div>
-      <div style="text-align:right;font-size:11px;color:var(--txt3)">
+      <div style="text-align:right;font-size:11px;color:var(--dim)">
         ${s.medals?.gold?`🥇${s.medals.gold} `:''}${s.medals?.silver?`🥈${s.medals.silver}`:''}
       </div>
     </div>`).join('')}
+
+    ${seasons.length?`
+    <div class="sec">EDITION BY EDITION</div>
+    <div class="table-wrap"><table class="data-table compact">
+      <thead><tr><th>WC</th><th>Result</th><th class="num">P</th><th class="num">GF</th><th class="num">GA</th></tr></thead>
+      <tbody>${seasons.map(s=>`<tr>
+        <td style="color:var(--dim)">#${s.wc}</td>
+        <td style="color:${finishColor(s.reached)};font-weight:700;font-size:11px">${finishLabel(s.reached)}</td>
+        <td class="num">${s.games||'—'}</td>
+        <td class="num">${s.reached==='DNQ'?'—':s.gf}</td>
+        <td class="num">${s.reached==='DNQ'?'—':s.ga}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`:''}
     </div>
   `
   $('team-modal-overlay').style.display = 'flex'
@@ -1120,30 +1187,88 @@ function renderGOAT() {
     </div>`
 }
 
+// Aggregate all-time team stats across every edition's teamSeasons
+function aggregateTeamRecords() {
+  const teams = {}
+  ;(S.history||[]).forEach(h => {
+    // titles/finishes
+    const bump = (name, cc, key) => {
+      if (!name) return
+      if (!teams[name]) teams[name] = { name, cc, titles:0, finals:0, semis:0, qualified:0, games:0, gf:0, ga:0, wins:0 }
+      teams[name][key]++
+    }
+    bump(h.champion, h.cc, 'titles')
+    if (h.runnerUp) bump(h.runnerUp.name, h.runnerUp.cc, 'finals')
+    if (h.third) bump(h.third.name, h.third.cc, 'semis')
+    ;(h.teamSeasons||[]).forEach(ts => {
+      if (!teams[ts.name]) teams[ts.name] = { name:ts.name, cc:ts.cc, titles:0, finals:0, semis:0, qualified:0, games:0, gf:0, ga:0, wins:0 }
+      const t = teams[ts.name]
+      t.qualified++; t.games += ts.games||0; t.gf += ts.gf||0; t.ga += ts.ga||0; t.wins += ts.w||0
+    })
+  })
+  return Object.values(teams)
+}
+
+// Aggregate all-time player stats across every edition's playerSeasons
+function aggregatePlayerRecords() {
+  const players = {}
+  ;(S.history||[]).forEach(h => (h.playerSeasons||[]).forEach(ps => {
+    if (!players[ps.name]) players[ps.name] = { name:ps.name, cc:ps.cc, team:ps.team, pos:ps.pos, tier:ps.tier, goals:0, games:0, editions:0 }
+    const p = players[ps.name]
+    p.goals += ps.goals||0; p.games += ps.games||0; p.editions++
+  }))
+  return Object.values(players)
+}
+
+function recordTopList(title, icon, rows) {
+  if (!rows.length) return ''
+  return `<div class="cl-stat-card card">
+    <div class="cl-stat-title">${icon} ${title}</div>
+    <table class="data-table compact"><tbody>
+    ${rows.map((r,i)=>`<tr>
+      <td style="color:var(--txt3);width:18px">${i+1}</td>
+      <td>${r.cc?flag(r.cc,14)+' ':''}<strong>${r.name}</strong>${r.sub?` <span style="font-size:10px;color:var(--txt3)">${r.sub}</span>`:''}</td>
+      <td style="color:var(--gold);font-family:var(--font-head);font-weight:700;text-align:right">${r.val}</td>
+    </tr>`).join('')}
+    </tbody></table>
+  </div>`
+}
+
 function renderRecords() {
   const r = S.records || {}
-  const cands = goatCandidates()
-  const mostGoals = cands.slice().sort((a,b)=>(b.careerGoals||0)-(a.careerGoals||0))[0]
-  const mostTitles = cands.slice().sort((a,b)=>(b.medals?.gold||0)-(a.medals?.gold||0))[0]
-  const mostWCs = cands.slice().sort((a,b)=>(b.wcsPlayed||0)-(a.wcsPlayed||0))[0]
-  // Team records from history
-  const titles = {}
-  ;(S.history||[]).forEach(h => { titles[h.champion] = (titles[h.champion]||0)+1 })
-  const teamRank = Object.entries(titles).sort((a,b)=>b[1]-a[1]).slice(0,5)
+  const teams = aggregateTeamRecords()
+  const players = aggregatePlayerRecords()
+  if (!teams.length && !players.length) return '<div class="empty">No records yet — play some World Cups!</div>'
+
+  const top = (arr, key, n=5) => [...arr].filter(x=>(x[key]||0)>0).sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)
+
+  // Single-event highlight cards
   const recCard = (icon, label, value, sub) => `<div class="record-card">
     <div class="record-icon">${icon}</div>
     <div class="record-body"><div class="record-label">${label}</div>
     <div class="record-value">${value}</div>${sub?`<div class="record-sub">${sub}</div>`:''}</div>
   </div>`
-  let html = '<div class="sec">📊 ALL-TIME RECORDS</div><div class="records-grid">'
-  if (teamRank.length) html += recCard('🏆','Most Titles (Team)', `${teamRank[0][0]} — ${teamRank[0][1]}`, teamRank.slice(1,4).map(([n,t])=>`${n} (${t})`).join(' · '))
+  let html = '<div class="sec">📊 RECORD BOOK</div><div class="records-grid">'
   if (r.biggestWin) html += recCard('💥','Biggest Win', `${r.biggestWin.winner} ${r.biggestWin.g1}–${r.biggestWin.g2} ${r.biggestWin.loser}`, `World Cup #${r.biggestWin.wc}`)
-  if (r.mostGoalsOneWC) html += recCard('🔥','Most Goals in One WC', `${r.mostGoalsOneWC.name} — ${r.mostGoalsOneWC.goals}`, `${r.mostGoalsOneWC.team} · WC #${r.mostGoalsOneWC.wc}`)
-  if (mostGoals && mostGoals.careerGoals) html += recCard('⚽','Career Goals', `${mostGoals.name} — ${mostGoals.careerGoals}`, mostGoals.teamName)
-  if (mostTitles && (mostTitles.medals?.gold||0) > 0) html += recCard('🥇','Most Titles (Player)', `${mostTitles.name} — ${mostTitles.medals.gold}`, mostTitles.teamName)
-  if (mostWCs && mostWCs.wcsPlayed >= 3) html += recCard('🗓️','Most World Cups Played', `${mostWCs.name} — ${mostWCs.wcsPlayed}`, mostWCs.teamName)
+  if (r.mostGoalsOneWC) html += recCard('🔥','Most Goals · One WC', `${r.mostGoalsOneWC.name} — ${r.mostGoalsOneWC.goals}`, `${r.mostGoalsOneWC.team} · WC #${r.mostGoalsOneWC.wc}`)
   html += '</div>'
-  if (html.indexOf('record-card') === -1) return '<div class="empty">No records yet — play some World Cups!</div>'
+
+  // TEAM records
+  html += '<div class="sec">🏟️ TEAM RECORDS</div><div class="cl-stats-grid">'
+  html += recordTopList('Most Titles', '🏆', top(teams,'titles').map(t=>({name:t.name,cc:t.cc,val:t.titles})))
+  html += recordTopList('Most Finals', '🥈', top(teams,'finals').map(t=>({name:t.name,cc:t.cc,val:t.finals})))
+  html += recordTopList('Most Wins (all-time)', '✅', top(teams,'wins').map(t=>({name:t.name,cc:t.cc,val:t.wins})))
+  html += recordTopList('Most Goals For', '⚽', top(teams,'gf').map(t=>({name:t.name,cc:t.cc,val:t.gf})))
+  html += recordTopList('Most Appearances', '🗓️', top(teams,'qualified').map(t=>({name:t.name,cc:t.cc,val:t.qualified})))
+  html += '</div>'
+
+  // PLAYER records
+  html += '<div class="sec">⭐ PLAYER RECORDS</div><div class="cl-stats-grid">'
+  html += recordTopList('Most Career Goals', '⚽', top(players,'goals').map(p=>({name:p.name,cc:p.cc,sub:p.team,val:p.goals})))
+  html += recordTopList('Most Appearances', '🗓️', top(players,'editions').map(p=>({name:p.name,cc:p.cc,sub:p.team,val:p.editions})))
+  html += recordTopList('Most Games Played', '🎽', top(players,'games').map(p=>({name:p.name,cc:p.cc,sub:p.team,val:p.games})))
+  html += '</div>'
+
   return html
 }
 
@@ -1178,12 +1303,22 @@ function renderTournamentsHistory() {
 
   return `
     <div class="sec">TOURNAMENT HISTORY</div>
-    ${hist.map(h=>`<div class="history-card">
-      <div class="history-wc">WORLD CUP #${h.wcNumber}</div>
-      <div class="history-champ">🏆 ${flag(h.cc||'')} ${h.champion}</div>
-      <div style="font-size:12px;color:var(--txt2);margin-top:4px">${h.totalGoals||0} goals total</div>
-      ${h.awards?.topScorer?`<div style="font-size:11px;color:var(--txt3)">⚽ ${h.awards.topScorer.name} (${h.awards.topScorer.goals}) · 🌟 ${h.awards.offMVP?.name||'—'} · 🛡 ${h.awards.defMVP?.name||'—'}</div>`:''}
-    </div>`).join('')}
+    ${hist.map(h=>{
+      const podium = (medal, t, cls) => t ? `<div class="podium-row" style="--c1:${natColors(t.cc)[0]};--c2:${natColors(t.cc)[1]}">
+        <span class="podium-stripe"></span><span class="podium-medal">${medal}</span>
+        ${flag(t.cc,16)} <span class="podium-name ${cls}">${t.name}</span>
+      </div>` : ''
+      return `<div class="history-card">
+        <div class="history-wc">WORLD CUP #${h.wcNumber}${h.host?` · 🏟️ ${h.host}`:''}</div>
+        <div class="podium">
+          ${podium('🥇',{name:h.champion,cc:h.cc},'gold')}
+          ${podium('🥈',h.runnerUp,'silver')}
+          ${podium('🥉',h.third,'bronze')}
+          ${podium('4',h.fourth,'fourth')}
+        </div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">${h.totalGoals||0} goals${h.awards?.topScorer?` · ⚽ ${h.awards.topScorer.name} (${h.awards.topScorer.goals})`:''}</div>
+      </div>`
+    }).join('')}
 
     <div class="sec">TEAM RANKINGS</div>
     <div class="table-wrap"><table class="data-table">
@@ -1196,27 +1331,6 @@ function renderTournamentsHistory() {
         <td class="num" style="color:var(--txt3)">${t.semi||'—'}</td>
         <td class="num" style="color:var(--txt3)">${t.qf||'—'}</td>
       </tr>`).join('')}</tbody>
-    </table></div>
-
-    <div class="sec">TOP SCORERS (ALL TIME)</div>
-    <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Player</th><th>Pos</th><th class="num">Goals</th><th class="num">🥇</th><th class="num">Off MVP</th></tr></thead>
-      <tbody>${[...pList].sort((a,b)=>b.goals-a.goals).slice(0,10).map(p=>`<tr>
-        <td><strong>${p.name}</strong></td><td>${p.pos}</td>
-        <td class="num" style="color:var(--gold)">${p.goals||'—'}</td>
-        <td class="num" style="color:var(--gold2)">${p.gold||'—'}</td>
-        <td class="num">${p.offMVP||'—'}</td>
-      </tr>`).join('')}</tbody>
-    </table></div>
-
-    <div class="sec">DEFENSIVE MVPs (ALL TIME)</div>
-    <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Player</th><th>Pos</th><th class="num">Def MVP</th><th class="num">🥇</th></tr></thead>
-      <tbody>${[...pList].filter(p=>['DEF','GK'].includes(p.pos)).sort((a,b)=>b.defMVP-a.defMVP).slice(0,8).map(p=>`<tr>
-        <td><strong>${p.name}</strong></td><td>${p.pos}</td>
-        <td class="num" style="color:var(--blue)">${p.defMVP||'—'}</td>
-        <td class="num">${p.gold||'—'}</td>
-      </tr>`).join('')}</tbody>
     </table></div>`
 }
 
@@ -1228,7 +1342,7 @@ function showInterWC() {
   const notableDeb = debuting.filter(s=>NOTABLE.has(s.tier))
   const hostNation = ALL_NATIONS.find(n => n.name === host)
   $('interwc-content').innerHTML = `
-    <div style="font-family:var(--font-head);font-size:22px;letter-spacing:.1em;color:var(--gold2);margin-bottom:4px">BETWEEN WORLD CUPS</div>
+    <div class="hero-title" style="font-size:20px;margin-bottom:4px"><span class="l1">BETWEEN</span> <span class="l2">CUPS</span></div>
     <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">WC #${S.wcNumber} preparations</div>
 
     <div class="interwc-host">
@@ -1285,8 +1399,8 @@ async function renderSlotSelect() {
   el.innerHTML = `
     <div style="text-align:center;padding:32px 16px 16px">
       <div style="font-size:60px;margin-bottom:10px">⚽</div>
-      <div style="font-family:var(--font-head);font-size:34px;letter-spacing:.12em;color:var(--gold2)">WORLD CUP SIMULATOR</div>
-      <div style="color:var(--txt2);margin:6px 0 24px">Choose a save slot to begin</div>
+      <div class="hero-title"><span class="l1">WORLD</span> <span class="l2">CUP</span></div>
+      <div class="hero-sub">Pick a save slot to kick off</div>
     </div>
     <div class="slots-grid">
       ${[1,2,3].map(n => {
