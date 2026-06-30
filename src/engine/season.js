@@ -17,7 +17,7 @@ function gauss(sig = 3.5, maxAbs = 12) {
 // ── History component (0–20 pts based on last 5 WCs) ─────────
 function histPts(nationName) {
   if (!S.history?.length) return 0
-  const pts = { Winner:20, Final:15, 'Semi-finals':10, 'Quarter-finals':6, 'Round of 16':3, Group:1 }
+  const pts = { Winner:20, Final:15, Third:12, Fourth:10, 'Semi-finals':10, 'Quarter-finals':6, 'Round of 16':3, Group:1 }
   const recent = [...S.history].reverse().slice(0, 5)
   let ws = 0, ss = 0
   recent.forEach((h, i) => {
@@ -282,14 +282,37 @@ export function playKnockoutMatch(match) {
 }
 
 export function advanceKnockout() {
-  const round = S.knockoutRounds[S.knockoutRounds.length - 1]
+  // Operate on the most-recent fully-played round that hasn't been advanced.
+  // (Rounds are advanced in play order; a round is "advanced" once its
+  // successor exists or it's terminal.)
+  const playedRounds = S.knockoutRounds.filter(r => r.matches.length && r.matches.every(m => m.played))
+  // Find the played round we still need to process. We track this via a flag.
+  const round = playedRounds.find(r => !r._advanced)
+  if (!round) return
+  round._advanced = true
+
   const winners = round.matches.map(m => m.result?.winner).filter(Boolean)
   const losers  = round.matches.map(m => {
     if (!m.result?.winner) return null
     return m.result.winner === m.t1 ? m.t2 : m.t1
   }).filter(Boolean)
 
-  losers.forEach(t => { if (!S.roundReached[t.name]) S.roundReached[t.name] = round.name })
+  // Third-place game just finished → no new round; the Final is already queued.
+  if (round.name === 'Third Place') {
+    const tp = round.matches[0]
+    if (tp.result) {
+      const w3 = tp.result.winner, l3 = w3 === tp.t1 ? tp.t2 : tp.t1
+      S.roundReached[w3.name] = 'Third'
+      S.roundReached[l3.name] = 'Fourth'
+    }
+    autoSave()
+    return
+  }
+
+  // Semi-final losers get their placing from the Third-Place game, not here
+  if (round.name !== 'Semi-finals') {
+    losers.forEach(t => { if (!S.roundReached[t.name]) S.roundReached[t.name] = round.name })
+  }
 
   // ── Knockout-exit storylines ──
   losers.forEach(t => {
@@ -299,7 +322,7 @@ export function advanceKnockout() {
     })
   })
 
-  if (winners.length === 1) {
+  if (round.name === 'Final') {
     S.champion = winners[0]
     S.roundReached[winners[0].name] = 'Winner'
     if (losers[0]) S.roundReached[losers[0].name] = 'Final'
@@ -308,18 +331,24 @@ export function advanceKnockout() {
     return
   }
 
-  const nextName = { 16:'Round of 16', 8:'Quarter-finals', 4:'Semi-finals', 2:'Final' }[winners.length] || 'Next Round'
+  const nextName = { 'Round of 16':'Quarter-finals', 'Quarter-finals':'Semi-finals', 'Semi-finals':'Final' }[round.name] || 'Final'
   const newMatches = []
   for (let i = 0; i < winners.length; i += 2)
     newMatches.push({ t1:winners[i], t2:winners[i+1], played:false, result:null })
-  S.knockoutRounds.push({ name:nextName, matches:newMatches })
+
+  if (round.name === 'Semi-finals') {
+    S.knockoutRounds.push({ name:'Third Place', matches:[{ t1:losers[0], t2:losers[1], played:false, result:null }] })
+    S.knockoutRounds.push({ name:'Final', matches:newMatches })
+  } else {
+    S.knockoutRounds.push({ name:nextName, matches:newMatches })
+  }
   autoSave()
 }
 
 function finalizeWC() {
   const famePts = { Winner:300, Final:150, 'Semi-finals':75, 'Quarter-finals':30, 'Round of 16':12, Group:0 }
   // Determine final standings: champion, runner-up (Final loser), 3rd/4th (SF losers)
-  const finishOrder = { Winner:6, Final:5, 'Semi-finals':4, 'Quarter-finals':3, 'Round of 16':2, Group:1 }
+  const finishOrder = { Winner:7, Final:6, Third:5, Fourth:4, 'Semi-finals':4, 'Quarter-finals':3, 'Round of 16':2, Group:1 }
   const rankByFinish = (S.teams || [])
     .map(t => ({ name:t.name, cc:t.cc, reached:S.roundReached[t.name]||'Group',
                  gd:(t.gf||0)-(t.ga||0), gf:t.gf||0 }))
@@ -328,21 +357,55 @@ function finalizeWC() {
   let offMVP = null, offRating = 0
   let defMVP = null, defRating = 0
 
+  // First pass: tally per-match fame from goals, clean sheets, and ratings
   S.teams?.forEach(t => {
     const reached = S.roundReached[t.name] || 'Group'
-    const fp = famePts[reached] || 0
     ;(t.stars || []).forEach(s => {
-      s.fame = (s.fame || 0) + fp + (s.goals || 0) * 20
-      if (reached === 'Winner') s.medals.gold++
-      else if (reached === 'Final') s.medals.silver++
-      else if (reached === 'Semi-finals') s.medals.bronze++
-      else if (reached === 'Quarter-finals') s.medals.sf = (s.medals.sf||0)+1
+      let fame = 0
+      const goals = s.goals || 0
+      // Goals raise fame: +2 per goal for FWD, +3 for others
+      fame += goals * (s.pos === 'FWD' ? 2 : 3)
+      // Per-match rating bonuses
+      ;(s.ratings || []).forEach(r => {
+        if (r >= 10) fame += 3
+        else if (r > 9) fame += 2
+        else if (r > 8) fame += 1
+      })
+      // Clean-sheet style bonus for keepers/defenders, per match without conceding
+      // (approximate: use goalsConceded across the tournament for GK/DEF)
+      if (s.pos === 'GK' || s.pos === 'DEF') {
+        const cleanish = Math.max(0, (s.ratings?.length || 0) - (s.goalsConcededMatches || 0))
+        fame += cleanish * (s.pos === 'GK' ? 2 : 1)
+      }
+      s._tourneyFame = (s._tourneyFame || 0) + fame
+    })
+  })
+
+  S.teams?.forEach(t => {
+    const reached = S.roundReached[t.name] || 'Group'
+    ;(t.stars || []).forEach(s => {
+      // Finish-based fame: Winner +10 all, Final(2nd) +3, Semis(3rd/4th) +1
+      if (reached === 'Winner') { s._tourneyFame += 10; s._tourneyMedals.gold++ }
+      else if (reached === 'Final') { s._tourneyFame += 3; s._tourneyMedals.silver++ }
+      else if (reached === 'Third') { s._tourneyFame += 1; s._tourneyMedals.bronze++ }
+      else if (reached === 'Fourth') { s._tourneyFame += 1 }
+      else if (reached === 'Semi-finals') { s._tourneyFame += 1; s._tourneyMedals.bronze++ }
+      else if (reached === 'Quarter-finals') { s._tourneyMedals.sf++ }
       if ((s.goals||0) > topGoals) { topGoals=s.goals; topScorer=s }
       const avgR = s.ratings?.length ? s.ratings.reduce((a,b)=>a+b,0)/s.ratings.length : 0
-      if (['FWD','MID'].includes(s.pos) && avgR > offRating) { offRating=avgR; offMVP=s }
-      if (['DEF','GK'].includes(s.pos) && avgR > defRating) { defRating=avgR; defMVP=s }
+      if (s.ratings?.length && ['FWD','MID'].includes(s.pos) && avgR > offRating) { offRating=avgR; offMVP=s }
+      if (s.ratings?.length && ['DEF','GK'].includes(s.pos) && avgR > defRating) { defRating=avgR; defMVP=s }
     })
-    // Sync stars back to nation data
+  })
+
+  // Award bonuses: Golden Boot, Off MVP, Def MVP (big fame boosts)
+  if (topScorer) { topScorer._goldenBoot = 1; topScorer._tourneyFame += 25 }
+  if (offMVP)    { offMVP._offMVP = 1;       offMVP._tourneyFame += 20 }
+  if (defMVP)    { defMVP._defMVP = 1;       defMVP._tourneyFame += 20 }
+
+  // Apply tournament fame to the live star objects, then sync to nations
+  S.teams?.forEach(t => {
+    ;(t.stars || []).forEach(s => { s.fame = (s.fame || 0) + (s._tourneyFame || 0) })
     const nation = ALL_NATIONS.find(n => n.name === t.name)
     if (nation) syncStarsBack(nation, t.stars)
   })
@@ -401,10 +464,14 @@ function finalizeWC() {
   ;(S.teams || []).forEach(t => (t.stars || []).forEach(s => {
     const games = (s.ratings?.length) || 0
     if (games > 0 || (S.scorers[s.name]||0) > 0) {
+      const avg = games ? (s.ratings.reduce((a,b)=>a+b,0)/games) : 0
       playerSeasons.push({
         name: s.name, cc: t.cc, team: t.name, pos: s.pos, tier: s.tier,
         goals: S.scorers[s.name] || 0, games,
+        avgRating: avg ? +avg.toFixed(1) : 0,
         reached: S.roundReached[t.name] || 'Group',
+        offMVP: s._offMVP || 0, defMVP: s._defMVP || 0, goldenBoot: s._goldenBoot || 0,
+        fame: s._tourneyFame || 0,
       })
     }
   }))
@@ -469,6 +536,20 @@ export function startNewWC() {
       })
     }
   })
+
+  // Stash the most recent transition for the Tournament → Transfers tab
+  S.lastTransition = {
+    wcNumber: S.wcNumber,
+    retiring: retiring.map(st => ({
+      name: st.name, cc: st.cc, teamName: st.teamName, pos: st.pos, tier: st.tier,
+      careerGoals: st.careerGoals || 0, fame: st.fame || 0,
+      wcsActuallyPlayed: st.wcsActuallyPlayed || 0,
+      medals: { ...(st.medals || {}) },
+    })),
+    debuting: debuting.map(st => ({
+      name: st.name, cc: st.cc, teamName: st.teamName, pos: st.pos, tier: st.tier,
+    })),
+  }
 
   return { retiring, debuting, host: S.hostNation, ratingChanges: ratingChanges.slice(0, 8) }
 }

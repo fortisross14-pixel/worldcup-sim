@@ -171,9 +171,12 @@ function computeMatchStats(myE, oppE) {
 }
 
 // ── Stats → raw goals ─────────────────────────────────────────
-function statsToGoals(matchStats, myE, possessionPct) {
+function statsToGoals(matchStats, myE, possessionPct, oppE) {
   const spGap = myE.setPieces - 85
-  const convMax = clamp(0.15 + spGap / 1400, 0.11, 0.20)
+  // Skill gap vs opponent's defense raises conversion — dominant sides rout.
+  const skillGap = oppE ? (myE.attack - oppE.defense) : 0
+  const gapBonus = clamp(skillGap * 0.005, -0.05, 0.13)
+  const convMax = clamp(0.13 + spGap / 1400 + gapBonus, 0.09, 0.36)
   const conv = Math.random() * convMax
   let shotGoals   = matchStats.shots * conv
   let possGoals   = possessionPct >= 72 ? 1 : 0
@@ -185,8 +188,8 @@ function statsToGoals(matchStats, myE, possessionPct) {
 // ── Normalize raw float goals to realistic integer score ──────
 function normalize(raw) {
   if (raw <= 1) return Math.round(raw)
-  if (raw >= 10) return Math.min(6, Math.round(0.50 * (raw - 1)))
-  return Math.min(Math.round(0.58 * (raw - 1)), 6)
+  if (raw >= 12) return Math.min(7, Math.round(0.55 * (raw - 1)))
+  return Math.min(Math.round(0.62 * (raw - 1)), 7)
 }
 function preserveWinner(rA, rB, nA, nB) {
   if (rA > rB) { if (nA <= nB) nA = Math.min(7, nB + 1) }
@@ -301,6 +304,17 @@ function calcStarRating(pos, tier, gf, ga, myShots, oppShots, poss, starGoals, m
 }
 
 // ── Main match simulation ─────────────────────────────────────
+// Pick a plausible scorer for an extra-time goal (prefer attacking stars)
+function pickScorer(stars, team) {
+  const attackers = (stars || []).filter(s => s && ['FWD','MID'].includes(s.pos))
+  if (attackers.length && Math.random() < 0.7) {
+    const s = attackers[Math.floor(Math.random()*attackers.length)]
+    s._matchGoals = (s._matchGoals||0) + 1
+    return s.name
+  }
+  return team.name + ' (sub)'
+}
+
 export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   const e1 = getEffStats(t1, isKO)
   const e2 = getEffStats(t2, isKO)
@@ -319,8 +333,8 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   const corners1 = m1.corners, corners2 = m2.corners
 
   // Stage 2: raw goals
-  let raw1 = statsToGoals(m1, e1, possession1)
-  let raw2 = statsToGoals(m2, e2, possession2)
+  let raw1 = statsToGoals(m1, e1, possession1, e2)
+  let raw2 = statsToGoals(m2, e2, possession2, e1)
 
   // Stage 3: normalize
   let g1 = normalize(raw1), g2 = normalize(raw2)
@@ -351,20 +365,34 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   t1.mentalityDelta = clamp(t1Bef + d1, -12, 12)
   t2.mentalityDelta = clamp(t2Bef + d2, -12, 12)
 
-  // Stage 6: extra time / penalties
-  let winner = null, penalties = false
+  // Stage 6: extra time / penalties (knockout only)
+  let winner = null, penalties = false, extraTime = false
+  let etGoals1 = 0, etGoals2 = 0
   if (!allowDraw && g1 === g2) {
-    g1 += Math.random() < 0.22 ? 1 : 0
-    g2 += Math.random() < 0.22 ? 1 : 0
-    if (g1 !== g2) { winner = g1 > g2 ? t1 : t2 }
+    extraTime = true
+    // Two 15-min extra periods. Each team has a goal chance per period that
+    // scales with their attacking edge. Higher quality = more likely to score.
+    const edge = (e1.attack - e2.defense) - (e2.attack - e1.defense)
+    const p1 = clamp(0.18 + edge * 0.004, 0.08, 0.34)
+    const p2 = clamp(0.18 - edge * 0.004, 0.08, 0.34)
+    for (let period = 0; period < 2; period++) {
+      if (Math.random() < p1) { g1++; etGoals1++ }
+      if (Math.random() < p2) { g2++; etGoals2++ }
+    }
+    if (g1 !== g2) { winner = g1 > g2 ? t1 : t2; effects.push(`⏱️ Settled in extra time`) }
     else {
-      winner = (e1.mental + rand(-10,10)) >= (e2.mental + rand(-10,10)) ? t1 : t2
-      penalties = true; effects.push(`🥅 Penalties — ${winner.name} win!`)
+      // Penalty shootout
+      winner = (e1.mental + rand(-12,12)) >= (e2.mental + rand(-12,12)) ? t1 : t2
+      penalties = true; effects.push(`🥅 Penalty shootout — ${winner.name} win!`)
     }
   } else { winner = g1 > g2 ? t1 : g2 > g1 ? t2 : null }
 
-  // Build goal timeline with star attribution (uses this match's intended goals)
-  const timeline = buildTimeline(t1, g1, t2, g2, e1.stamina, e2.stamina, stars1, stars2)
+  // Build goal timeline with star attribution (uses this match's intended goals).
+  // Extra-time goals are appended at 91-120'.
+  const timeline = buildTimeline(t1, g1 - etGoals1, t2, g2 - etGoals2, e1.stamina, e2.stamina, stars1, stars2)
+  for (let i = 0; i < etGoals1; i++) timeline.push({ minute: 91 + Math.floor(Math.random()*29), team:1, scorerName: pickScorer(stars1, t1), isStar: (stars1||[]).some(s=>s.pos==='FWD'||s.pos==='MID') })
+  for (let i = 0; i < etGoals2; i++) timeline.push({ minute: 91 + Math.floor(Math.random()*29), team:2, scorerName: pickScorer(stars2, t2), isStar: (stars2||[]).some(s=>s.pos==='FWD'||s.pos==='MID') })
+  timeline.sort((a,b)=>a.minute-b.minute)
 
   // Tally each star's ACTUAL goals this match from the (post-cap) timeline,
   // then fold into cumulative totals. Player stats and Golden Boot stay in sync.
@@ -403,7 +431,7 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   })
 
   return {
-    t1, t2, g1, g2, winner, penalties, effects,
+    t1, t2, g1, g2, winner, penalties, extraTime, effects,
     shots1, shots2, corners1, corners2, possession1, possession2,
     starRatings, timeline, tranches,
     mentalityChanges: {

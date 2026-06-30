@@ -45,11 +45,13 @@ export function genStar(nation, wcNumber, overrideWcsPlayed = null) {
     careerMult: careerMult(wcsPlayed, wcsTotal),
     teamName: nation.name, cc: nation.cc,
     wcsTotal, wcsPlayed, wcsRemaining,
+    wcsActuallyPlayed: 0,
     wcStart: wcNumber || 1,
     goals: 0, goalsConceded: 0,
     ratings: [], allTimeRatings: [],
     fame: 0,
     medals: { gold:0, silver:0, bronze:0, sf:0 },
+    awards: { offMVP:0, defMVP:0, goldenBoot:0 },
     retired: false, retiredWC: null,
   }
 }
@@ -110,13 +112,21 @@ export function ageAllStars(wcNumber) {
 export function linkStarsToTeam(nation) {
   return (nation.stars || []).map(s => ({
     ...s,
-    // Don't mutate the nation's star — work on a copy
+    // Deep-copy medals so the team copy never mutates the nation's record,
+    // and zero out per-tournament counters (these get synced back after).
+    medals: { ...(s.medals || {}) },
     ratings: [],
     goals: 0,
+    _tourneyFame: 0,
+    _tourneyMedals: { gold:0, silver:0, bronze:0, sf:0 },
+    _offMVP: 0,
+    _defMVP: 0,
+    _goldenBoot: 0,
   }))
 }
 
-// Update nation's star records from team's star copies after tournament
+// Update nation's star records from team's star copies after tournament.
+// Only the per-tournament deltas (_tourney*) are added back.
 export function syncStarsBack(nation, teamStars) {
   if (!nation.stars || !teamStars) return
   teamStars.forEach(ts => {
@@ -125,14 +135,19 @@ export function syncStarsBack(nation, teamStars) {
     ns.goals = (ns.goals || 0) + (ts.goals || 0)
     ns.careerGoals = (ns.careerGoals || 0) + (ts.goals || 0)
     ns.goalsConceded = (ns.goalsConceded || 0) + (ts.goalsConceded || 0)
-    ns.fame = (ns.fame || 0) + (ts.fame || 0)
-    if (ts.medals) {
-      ns.medals = ns.medals || {}
-      ns.medals.gold   = (ns.medals.gold   || 0) + (ts.medals.gold   || 0)
-      ns.medals.silver = (ns.medals.silver || 0) + (ts.medals.silver || 0)
-      ns.medals.bronze = (ns.medals.bronze || 0) + (ts.medals.bronze || 0)
-      ns.medals.sf     = (ns.medals.sf     || 0) + (ts.medals.sf     || 0)
-    }
+    ns.fame = (ns.fame || 0) + (ts._tourneyFame || 0)
+    const tm = ts._tourneyMedals || {}
+    ns.medals = ns.medals || { gold:0, silver:0, bronze:0, sf:0 }
+    ns.medals.gold   = (ns.medals.gold   || 0) + (tm.gold   || 0)
+    ns.medals.silver = (ns.medals.silver || 0) + (tm.silver || 0)
+    ns.medals.bronze = (ns.medals.bronze || 0) + (tm.bronze || 0)
+    ns.medals.sf     = (ns.medals.sf     || 0) + (tm.sf     || 0)
+    ns.awards = ns.awards || { offMVP:0, defMVP:0, goldenBoot:0 }
+    ns.awards.offMVP    = (ns.awards.offMVP    || 0) + (ts._offMVP || 0)
+    ns.awards.defMVP    = (ns.awards.defMVP    || 0) + (ts._defMVP || 0)
+    ns.awards.goldenBoot= (ns.awards.goldenBoot|| 0) + (ts._goldenBoot || 0)
+    ns.playedThisWC = (ts.ratings?.length || 0) > 0
+    if (ns.playedThisWC) ns.wcsActuallyPlayed = (ns.wcsActuallyPlayed || 0) + 1
     if (ts.ratings?.length) {
       ns.allTimeRatings = [...(ns.allTimeRatings || []), ...ts.ratings].slice(-60)
     }
