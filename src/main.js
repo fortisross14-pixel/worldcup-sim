@@ -1,5 +1,5 @@
 import { S, autoSave, loadGame, clearGame, exportSave, importSave, loadSlot, allSlotInfo, deleteSlot, setActiveSlot, getActiveSlot } from './store.js'
-import { ALL_NATIONS, flag, getSoul } from './data/nations.js'
+import { ALL_NATIONS, flag, getSoul, natColors } from './data/nations.js'
 import { initAllStars, ageAllStars, TIER_LABELS, TIER_COLORS, TIER_ORDER } from './engine/stars.js'
 import {
   runQualification, drawGroups, groupStandings, playGroupMatch, buildKnockout,
@@ -694,7 +694,7 @@ function renderPlay() {
     const aw = S.seasonAwards || {}
     const champStars = S.champion?.stars || []
     html = `
-      <div class="champion-banner grand">
+      <div class="champion-banner grand" style="--c1:${natColors(S.champion?.cc)[0]};--c2:${natColors(S.champion?.cc)[1]}">
         <div class="champ-trophy">🏆</div>
         <div class="champ-title">WORLD CUP #${S.wcNumber} CHAMPIONS</div>
         <div class="champ-name">${flag(S.champion?.cc||'',28)} ${S.champion?.name}</div>
@@ -771,36 +771,46 @@ function renderGroups() {
     const sorted = groupStandings(grp)
     html += `<div class="group-card">
       <div class="group-title">Group ${grp.id}
-        <button class="btn btn-sm" style="font-size:9px;margin-left:4px" onclick="skipGroup(${gi})">⏭ Skip</button>
+        <button class="btn btn-sm" style="font-size:9px;margin-left:auto" onclick="skipGroup(${gi})">⏭ Skip</button>
       </div>
-      <div class="group-table-head">
-        <span></span><span></span>
-        <span class="gt-col">OVR</span><span class="gt-col">GF</span><span class="gt-col">GA</span><span class="gt-col">Pts</span>
+      <div class="gtable">
+        <div class="gtable-head">
+          <span class="gt-team"></span>
+          <span>OVR</span><span>W</span><span>D</span><span>L</span><span>GF</span><span>GA</span><span>GD</span><span class="gt-pts">Pts</span>
+        </div>
+        ${sorted.map((t,i)=>{
+          const eff = getEffStats(t)
+          const o = Math.round((eff.attack+eff.defense+eff.stamina+eff.mental+eff.setPieces)/5)
+          const [c1,c2] = natColors(t.cc)
+          const gd = (t.gf||0)-(t.ga||0)
+          const topStar = (t.stars||[]).find(s=>['generational','legendary'].includes(s.tier))
+          return `<div class="gtable-row ${i<2?'qualifies':''}" onclick="openTeamModal('${t.name}')" style="--c1:${c1};--c2:${c2}">
+            <span class="gt-team">
+              <span class="gt-stripe"></span>
+              ${flag(t.cc,18)}
+              <span class="gt-name">${t.name}</span>
+              ${topStar?`<span style="color:${tierColor(topStar.tier)};font-size:9px">⭐</span>`:''}
+            </span>
+            <span class="gt-ovr">${o}</span>
+            <span>${t.w||0}</span><span>${t.d||0}</span><span>${t.l||0}</span>
+            <span>${t.gf||0}</span><span>${t.ga||0}</span>
+            <span class="${gd>0?'gt-pos':gd<0?'gt-neg':''}">${gd>0?'+':''}${gd}</span>
+            <span class="gt-pts">${t.pts||0}</span>
+          </div>`
+        }).join('')}
       </div>
-      ${sorted.map((t,i)=>{
-        const eff = getEffStats(t)
-        const o = Math.round((eff.attack+eff.defense+eff.stamina+eff.mental+eff.setPieces)/5)
-        const topStar = (t.stars||[]).find(s=>['generational','legendary'].includes(s.tier))
-        return `<div class="group-row ${i<2?'qualifies':''}" onclick="openTeamModal('${t.name}')">
-          ${flag(t.cc)} <span class="group-name">${t.name}${topStar?` <span style="color:${tierColor(topStar.tier)};font-size:10px">⭐</span>`:''}</span>
-          <span class="gt-col gt-ovr">${o}</span>
-          <span class="gt-col">${t.gf||0}</span>
-          <span class="gt-col">${t.ga||0}</span>
-          <span class="gt-col group-pts">${t.pts||0}</span>
-        </div>`
-      }).join('')}
     </div>`
   })
   html += '</div>'
   const played = S.groupMatches?.filter(m=>m.played)||[]
   if (played.length) {
-    html += '<div class="sec">RESULTS</div>'
-    html += played.slice(-8).reverse().map(m=>`<div class="match-result-card" style="padding:8px 10px">
+    html += '<div class="sec">RECENT RESULTS</div>'
+    html += played.slice(-6).reverse().map(m=>`<div class="match-result-card" style="padding:8px 10px">
       <div style="font-size:9px;color:var(--txt3);font-family:var(--font-head)">GROUP ${S.groups[m.gi]?.id}</div>
       <div class="match-teams" style="margin-top:2px">
-        <div class="match-team" onclick="openTeamModal('${m.t1.name}')">${flag(m.t1.cc)} ${m.t1.name}</div>
+        <div class="match-team" onclick="event.stopPropagation();openTeamModal('${m.t1.name}')">${flag(m.t1.cc)} ${m.t1.name}</div>
         <div class="match-score" style="font-size:18px">${m.result.g1}–${m.result.g2}</div>
-        <div class="match-team right" onclick="openTeamModal('${m.t2.name}')">${m.t2.name} ${flag(m.t2.cc)}</div>
+        <div class="match-team right" onclick="event.stopPropagation();openTeamModal('${m.t2.name}')">${m.t2.name} ${flag(m.t2.cc)}</div>
       </div>
     </div>`).join('')
   }
@@ -1002,14 +1012,15 @@ window.openTeamModal = function(teamName) {
   const statNames = {attack:'Attack',defense:'Defense',stamina:'Stamina',mental:'Mental',setPieces:'Set Pieces'}
 
   $('team-modal-content').innerHTML = `
-    <div class="row" style="margin-bottom:14px">
-      <div style="font-size:36px">${flag(t.cc)}</div>
-      <div style="flex:1">
-        <div style="font-family:var(--font-head);font-size:22px;color:var(--txt)">${t.name}</div>
-        <div style="font-size:12px;color:var(--txt2)">${t.tier?.toUpperCase()||''} · OVR ${o} · Rating ${t.rating||'—'}</div>
+    <div class="team-modal-hero" style="--c1:${natColors(t.cc)[0]};--c2:${natColors(t.cc)[1]}">
+      <div style="font-size:40px">${flag(t.cc,32)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-family:var(--font-head);font-size:24px;color:#fff;letter-spacing:.03em;text-shadow:0 1px 4px rgba(0,0,0,.5)">${t.name}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.85)">${t.tier?.toUpperCase()||''} · OVR ${o}${t.rating?` · Rating ${t.rating}`:''}</div>
       </div>
-      <button class="btn btn-icon" onclick="closeTeamModal()">✕</button>
+      <button class="btn btn-icon" onclick="closeTeamModal()" style="background:rgba(0,0,0,.3)">✕</button>
     </div>
+    <div style="padding:0 2px">
 
     ${titles||finals||semis?`
     <div class="sec">WORLD CUP HISTORY</div>
@@ -1049,6 +1060,7 @@ window.openTeamModal = function(teamName) {
         ${s.medals?.gold?`🥇${s.medals.gold} `:''}${s.medals?.silver?`🥈${s.medals.silver}`:''}
       </div>
     </div>`).join('')}
+    </div>
   `
   $('team-modal-overlay').style.display = 'flex'
 }

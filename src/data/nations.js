@@ -11,17 +11,19 @@ export const TIERS = {
 
 // Star rarity chances by nation tier
 export const TIER_STAR_CHANCES = {
+  // Tuned so the whole world holds ~2 generational, ~10 legendary,
+  // ~15 epic, ~14 rare per cycle — elites concentrated in top nations.
   top: {
-    generational: 0.02, legendary: 0.08, epic: 0.15,
-    rare: 0.20, uncommon: 0.25 // rest = common
+    generational: 0.07, legendary: 0.22, epic: 0.25,
+    rare: 0.30, uncommon: 0.12 // rest = common
   },
   mid: {
-    generational: 0.005, legendary: 0.035, epic: 0.12,
-    rare: 0.25, uncommon: 0.30
+    generational: 0.005, legendary: 0.04, epic: 0.08,
+    rare: 0.06, uncommon: 0.30
   },
   rest: {
-    generational: 0, legendary: 0.01, epic: 0.06,
-    rare: 0.18, uncommon: 0.35
+    generational: 0, legendary: 0.005, epic: 0.01,
+    rare: 0.01, uncommon: 0.20
   },
 }
 
@@ -135,6 +137,38 @@ export const ALL_NATIONS = [
 // Confederation qualification slots (48-team WC format)
 export const CONF_SLOTS = {
   UEFA: 16, CONMEBOL: 6, CONCACAF: 6, CAF: 9, AFC: 8, OFC: 1, HOST: 1
+}
+
+// ── National colors (primary, secondary) for UI theming ──────
+export const NATION_COLORS = {
+  br:['#009b3a','#ffdf00'], ar:['#75aadb','#1a3a6a'], de:['#222222','#dd0000'],
+  it:['#0066cc','#1a4a8a'], fr:['#0055a4','#a4143a'], es:['#aa151b','#f1bf00'],
+  'gb-eng':['#ce1124','#1a3a8a'], uy:['#4a7fc4','#1a3a6a'], pt:['#006600','#ff0000'],
+  nl:['#ff6600','#21468b'], be:['#ef3340','#fdda24'], hr:['#ff0000','#171796'],
+  co:['#fcd116','#003893'], mx:['#006847','#ce1126'], us:['#3c3b6e','#b22234'],
+  ca:['#d52b1e','#8a1a14'], cl:['#0039a6','#d52b1e'], pe:['#d91023','#8a0a18'],
+  ec:['#ffaa00','#034ea2'], py:['#d52b1e','#0038a8'], bo:['#007a33','#ffe000'],
+  ve:['#cc9911','#cf142b'], sn:['#00853f','#e8c020'], ma:['#c1272d','#006233'],
+  ng:['#008751','#1a6a44'], eg:['#ce1126','#333333'], gh:['#006b3f','#fcd116'],
+  ci:['#f77f00','#009e60'], cm:['#007a5e','#ce1126'], dz:['#006233','#1a8a55'],
+  tn:['#e70013','#8a0a14'], ml:['#14b53a','#fcd116'], za:['#007749','#ffb612'],
+  kr:['#0a4aa8','#c60c30'], jp:['#bc002d','#8a1a2a'], ir:['#239f40','#da0000'],
+  au:['#00843d','#ffcd00'], sa:['#006c35','#1a8a55'], qa:['#8d1b3d','#6a1530'],
+  cn:['#de2910','#ffde00'], iq:['#007a3d','#ce1126'], ae:['#00732f','#ff0000'],
+  uz:['#1eb53a','#0099b5'], jo:['#007a3d','#ce1126'], bh:['#ce1126','#8a0a18'],
+  th:['#a51931','#2d2a4a'], vn:['#da251d','#ccaa00'], nz:['#1a3a8a','#444444'],
+  fj:['#68bfe5','#3a8ac4'], pf:['#ce1126','#8a0a18'], sb:['#0051ba','#215b33'],
+  pa:['#005293','#d21034'], sv:['#0047ab','#1a3a8a'], gt:['#4997d0','#2a6a9a'],
+  hn:['#0073cf','#1a5a9a'], cr:['#002b7f','#ce1126'], jm:['#009b3a','#fed100'],
+  ch:['#d52b1e','#8a1a14'], at:['#ed2939','#8a1a22'], dk:['#c60c30','#8a0820'],
+  se:['#006aa7','#fecc00'], no:['#ef2b2d','#002868'], pl:['#dc143c','#8a0c28'],
+  ua:['#0057b7','#ffd700'], rs:['#c6363c','#0c4076'], tr:['#e30a17','#8a0810'],
+  cz:['#11457e','#d7141a'], sk:['#0b4ea2','#ee1c25'], ro:['#1a3a8a','#fcd116'],
+  gr:['#0d5eaf','#1a4a8a'], hu:['#436f4d','#cd2a3e'], 'gb-sct':['#005eb8','#1a3a6a'],
+  ie:['#169b62','#ff883e'],
+}
+export function natColors(cc) {
+  return NATION_COLORS[cc] || ['#c9a84c', '#5a4a20']
 }
 
 // Flag as <img> from flagcdn.com — reliable on all mobile browsers
