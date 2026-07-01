@@ -33,16 +33,21 @@ export function genStar(nation, wcNumber, overrideWcsPlayed = null) {
   const pos  = POSITIONS[Math.floor(Math.random() * POSITIONS.length)]
   const [minL, maxL] = LIFESPANS[tier] || [1, 3]
   const wcsTotal  = rand(minL, maxL)
-  // On first WC: spawn at random career point so we have mix of rookies/veterans
-  const wcsPlayed = overrideWcsPlayed !== null ? overrideWcsPlayed : rand(0, Math.max(0, wcsTotal - 1))
+  // Everyone starts fresh: no fictional prior World Cups. wcsTotal just sets
+  // how many editions their career will span from their debut.
+  const wcsPlayed = overrideWcsPlayed !== null ? overrideWcsPlayed : 0
   const wcsRemaining = wcsTotal - wcsPlayed
+
+  // Career-phase multiplier: debut stars in the very first WC are already
+  // established players (prime), not weak rookies — they just have no WC history.
+  const initialMult = (wcNumber || 1) === 1 ? 1.00 : careerMult(wcsPlayed, wcsTotal)
 
   return {
     id: `${nation.name}_${tier}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
     name: getPlayerName(nation.cc),
     pos, tier,
     statBonus: { ...(STAR_BONUSES[pos]?.[tier] || STAR_BONUSES[pos]?.common || {}) },
-    careerMult: careerMult(wcsPlayed, wcsTotal),
+    careerMult: initialMult,
     teamName: nation.name, cc: nation.cc,
     wcsTotal, wcsPlayed, wcsRemaining,
     wcsActuallyPlayed: 0,
@@ -117,6 +122,7 @@ export function linkStarsToTeam(nation) {
     medals: { ...(s.medals || {}) },
     ratings: [],
     goals: 0,
+    _careerFame: s.fame || 0,   // remember career fame for display during the WC
     _tourneyFame: 0,
     _tourneyMedals: { gold:0, silver:0, bronze:0, sf:0 },
     _offMVP: 0,

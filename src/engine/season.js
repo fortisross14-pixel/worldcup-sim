@@ -361,7 +361,7 @@ function finalizeWC() {
   S.teams?.forEach(t => {
     const reached = S.roundReached[t.name] || 'Group'
     ;(t.stars || []).forEach(s => {
-      let fame = 0
+      let fame = 1  // +1 for qualifying / taking part
       const goals = s.goals || 0
       // Goals raise fame: +2 per goal for FWD, +3 for others
       fame += goals * (s.pos === 'FWD' ? 2 : 3)
@@ -440,22 +440,21 @@ function finalizeWC() {
   }
 
   // ── Per-team season records (for modals & team records page) ──
+  // Compute the FULL record (group + knockout) from every match this edition.
   const teamSeasons = (S.teams || []).map(t => {
-    // games played this edition
-    const ko = (t.w||0)+(t.d||0)+(t.l||0) // group games tracked in w/d/l; add KO games below
-    let koGames = 0, koGf = 0, koGa = 0
+    let games=0, w=0, d=0, l=0, gf=0, ga=0
     ;(S.allMatchResults || []).forEach(m => {
-      if (m.phase !== 'knockout') return
-      if (m.t1name === t.name) { koGames++; koGf += m.g1; koGa += m.g2 }
-      else if (m.t2name === t.name) { koGames++; koGf += m.g2; koGa += m.g1 }
+      let my, opp
+      if (m.t1name === t.name) { my=m.g1; opp=m.g2 }
+      else if (m.t2name === t.name) { my=m.g2; opp=m.g1 }
+      else return
+      games++; gf+=my; ga+=opp
+      if (my>opp) w++; else if (my<opp) l++; else d++
     })
     return {
       name: t.name, cc: t.cc,
       reached: S.roundReached[t.name] || 'Group',
-      games: ko + koGames,
-      gf: (t.gf||0) + koGf,
-      ga: (t.ga||0) + koGa,
-      w: t.w||0, d: t.d||0, l: t.l||0,
+      games, gf, ga, w, d, l,
     }
   })
 

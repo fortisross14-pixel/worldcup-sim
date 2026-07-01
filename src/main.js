@@ -894,16 +894,19 @@ function renderBracket() {
 }
 
 // ── STARS tab ─────────────────────────────────────────────────
-let starSortKey = 'tier', starFilter = 'all'
+let starSortKey = 'tier', starFilter = 'all', starStatus = 'active'
 
 function renderStars() {
   const el = $('tab-stars'); if (!el) return
-  const allStars = []
-  ALL_NATIONS.forEach(n => (n.stars||[]).forEach(s => allStars.push({...s,teamName:n.name,cc:n.cc})))
-  const filtered = starFilter==='all' ? allStars : allStars.filter(s=>s.pos===starFilter)
+  const activeStars = []
+  ALL_NATIONS.forEach(n => (n.stars||[]).forEach(s => activeStars.push({...s,teamName:n.name,cc:n.cc,_active:true})))
+  const retiredStars = (S.legends||[]).map(l => ({...l,teamName:l.teamName,cc:l.cc,_active:false,_retired:true}))
+
+  let pool = starStatus==='active' ? activeStars : starStatus==='retired' ? retiredStars : [...activeStars,...retiredStars]
+  const filtered = starFilter==='all' ? pool : pool.filter(s=>s.pos===starFilter)
   const sortFns = {
     tier:  (a,b)=>TIER_ORDER.indexOf(a.tier)-TIER_ORDER.indexOf(b.tier),
-    goals: (a,b)=>(b.goals||0)-(a.goals||0),
+    goals: (a,b)=>((b.goals||b.careerGoals||0))-((a.goals||a.careerGoals||0)),
     fame:  (a,b)=>(b.fame||0)-(a.fame||0),
     name:  (a,b)=>a.name.localeCompare(b.name),
   }
@@ -911,25 +914,30 @@ function renderStars() {
 
   el.innerHTML = `
     <div class="filter-row">
+      Status: ${[['active','Active'],['retired','Retired'],['all','All']].map(([f,lbl])=>`<button class="filter-btn ${starStatus===f?'active':''}" onclick="setStarStatus('${f}')">${lbl}</button>`).join('')}
+    </div>
+    <div class="filter-row">
       Sort: ${['tier','goals','fame','name'].map(k=>`<button class="filter-btn ${starSortKey===k?'active':''}" onclick="setStarSort('${k}')">${k}</button>`).join('')}
     </div>
     <div class="filter-row">
       Filter: ${['all','FWD','MID','DEF','GK'].map(f=>`<button class="filter-btn ${starFilter===f?'active':''}" onclick="setStarFilter('${f}')">${f}</button>`).join('')}
     </div>
-    <div style="font-size:11px;color:var(--txt3);margin-bottom:8px">${sorted.length} stars shown</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:8px">${sorted.length} ${starStatus==='retired'?'retired legends':starStatus==='all'?'stars (active + retired)':'active stars'} shown</div>
     <div class="star-grid">
-      ${sorted.map(s=>{
+      ${sorted.length===0?'<div class="empty">None yet — retired stars appear here after players hang up their boots.</div>':sorted.map(s=>{
         const avgR = s.allTimeRatings?.length ? (s.allTimeRatings.reduce((a,b)=>a+b,0)/s.allTimeRatings.length).toFixed(1) : null
         const bonus = Object.entries(s.statBonus||{}).filter(([,v])=>v>0).map(([k,v])=>`+${v} ${k.slice(0,3).toUpperCase()}`).join(' ')
-        return `<div class="star-card ${s.tier}" onclick="openStarModal('${s.id}','${s.teamName}')">
-          <div class="row" style="margin-bottom:3px">${tierBadge(s.tier)}<span class="star-pos">${s.pos}</span><span class="spacer"></span><span style="font-size:10px;color:var(--txt3)">⚡${s.fame||0}</span></div>
+        const goals = s.goals||s.careerGoals||0
+        const clickHandler = s._retired ? `onclick="openStarByName('${s.name.replace(/'/g,"\\'")}','${(s.teamName||'').replace(/'/g,"\\'")}')"` : `onclick="openStarModal('${s.id}','${s.teamName}')"`
+        return `<div class="star-card ${s.tier}" ${clickHandler} style="${s._retired?'opacity:.85':''}">
+          <div class="row" style="margin-bottom:3px">${tierBadge(s.tier)}<span class="star-pos">${s.pos}</span><span class="spacer"></span>${s._retired?'<span style="font-size:9px;color:var(--dim)">RETIRED</span>':`<span style="font-size:10px;color:var(--dim)">⚡${s.fame||0}</span>`}</div>
           <div class="star-name">${s.name}</div>
           <div class="star-team">${flag(s.cc)} ${s.teamName}</div>
           <div style="font-size:10px;color:${tierColor(s.tier)};margin-top:3px">${bonus}</div>
           <div class="star-stats">
-            <span class="star-stat">⚽ <span>${s.goals||0}</span></span>
+            <span class="star-stat">⚽ <span>${goals}</span></span>
             ${avgR?`<span class="star-stat">★ <span>${avgR}</span></span>`:''}
-            <span class="star-stat">WC <span>${s.wcsRemaining||0} left</span></span>
+            ${s._retired?`<span class="star-stat">${s.wcsPlayed||s.wcsActuallyPlayed||0} WCs</span>`:`<span class="star-stat">WC <span>${s.wcsRemaining||0} left</span></span>`}
             ${s.medals?.gold?`<span class="star-stat">🥇<span>${s.medals.gold}</span></span>`:''}
           </div>
         </div>`
@@ -938,6 +946,7 @@ function renderStars() {
 }
 window.setStarSort   = k => { starSortKey=k; renderStars() }
 window.setStarFilter = f => { starFilter=f; renderStars() }
+window.setStarStatus = s => { starStatus=s; renderStars() }
 
 // Resolve a player by name → open their modal (records aggregate by name)
 window.openStarByName = function(name, teamName) {
@@ -989,7 +998,6 @@ window.openStarModal = function(starId, teamName) {
   const nation = ALL_NATIONS.find(n=>n.name===teamName)
   const star = (nation?.stars||[]).find(s=>s.id===starId)
   if (!star) return
-  const avgR = star.allTimeRatings?.length ? (star.allTimeRatings.reduce((a,b)=>a+b,0)/star.allTimeRatings.length).toFixed(1) : '—'
   const [c1,c2] = natColors(star.cc)
 
   // Per-edition history from playerSeasons (include DNQ rows where the player
@@ -998,11 +1006,13 @@ window.openStarModal = function(starId, teamName) {
   const seasons = []
   let totEd=0, totGames=0, totGoals=0
   let totOffMVP=0, totDefMVP=0, totBoot=0
+  let ratingSum=0, ratedGames=0
   hist.forEach(h => {
     const ps = (h.playerSeasons||[]).find(x=>x.name===star.name && x.team===teamName)
     if (ps) {
       totEd++; totGames+=ps.games||0; totGoals+=ps.goals||0
       totOffMVP+=ps.offMVP||0; totDefMVP+=ps.defMVP||0; totBoot+=ps.goldenBoot||0
+      if (ps.avgRating && ps.games) { ratingSum += ps.avgRating * ps.games; ratedGames += ps.games }
       seasons.push({ wc:h.wcNumber, reached:ps.reached, games:ps.games||0, goals:ps.goals||0,
                      avg:ps.avgRating||0, offMVP:ps.offMVP||0, defMVP:ps.defMVP||0, boot:ps.goldenBoot||0 })
     } else if (h.wcNumber >= (star.wcStart||1)) {
@@ -1010,6 +1020,12 @@ window.openStarModal = function(starId, teamName) {
       seasons.push({ wc:h.wcNumber, reached:'DNQ', games:0, goals:0, avg:0, offMVP:0, defMVP:0, boot:0, dnq:true })
     }
   })
+  // Include current (in-progress) WC ratings not yet in history
+  if (star.ratings?.length) {
+    const cur = star.ratings.reduce((a,b)=>a+b,0)
+    ratingSum += cur; ratedGames += star.ratings.length
+  }
+  const avgR = ratedGames ? (ratingSum / ratedGames).toFixed(2) : '—'
   // Career award totals = historical + nation's stored awards (covers current)
   const awOff = star.awards?.offMVP || totOffMVP
   const awDef = star.awards?.defMVP || totDefMVP
@@ -1031,11 +1047,12 @@ window.openStarModal = function(starId, teamName) {
     <div class="modal-pad">
 
     <div class="sec">CAREER</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px">
       <div class="pv-stat"><span class="pl">GOALS</span><span class="pv" style="color:var(--hot)">${star.careerGoals||star.goals||0}</span></div>
-      <div class="pv-stat"><span class="pl">WCS PLAYED</span><span class="pv">${star.wcsActuallyPlayed||0}</span></div>
-      <div class="pv-stat"><span class="pl">WCS LEFT</span><span class="pv">${star.wcsRemaining||0}</span></div>
-      <div class="pv-stat"><span class="pl">AVG</span><span class="pv">${avgR}</span></div>
+      <div class="pv-stat"><span class="pl">GAMES</span><span class="pv">${totGames+(star.ratings?.length||0)}</span></div>
+      <div class="pv-stat"><span class="pl">WCS</span><span class="pv">${star.wcsActuallyPlayed||0}</span></div>
+      <div class="pv-stat"><span class="pl">LEFT</span><span class="pv">${star.wcsRemaining||0}</span></div>
+      <div class="pv-stat"><span class="pl">AVG</span><span class="pv" style="color:var(--cyan)">${avgR}</span></div>
     </div>
 
     <div class="sec">AWARDS</div>
@@ -1333,10 +1350,15 @@ function aggregateTeamRecords() {
 function aggregatePlayerRecords() {
   const players = {}
   ;(S.history||[]).forEach(h => (h.playerSeasons||[]).forEach(ps => {
-    if (!players[ps.name]) players[ps.name] = { name:ps.name, cc:ps.cc, team:ps.team, pos:ps.pos, tier:ps.tier, goals:0, games:0, editions:0 }
+    if (!players[ps.name]) players[ps.name] = { name:ps.name, cc:ps.cc, team:ps.team, pos:ps.pos, tier:ps.tier, goals:0, games:0, editions:0, ratingSum:0, ratedGames:0 }
     const p = players[ps.name]
     p.goals += ps.goals||0; p.games += ps.games||0; p.editions++
+    // Weighted rating: sum(avg × games) / total games
+    if (ps.avgRating && ps.games) { p.ratingSum += ps.avgRating * ps.games; p.ratedGames += ps.games }
   }))
+  Object.values(players).forEach(p => {
+    p.avgRating = p.ratedGames ? +(p.ratingSum / p.ratedGames).toFixed(2) : 0
+  })
   return Object.values(players)
 }
 
@@ -1392,6 +1414,9 @@ function renderRecords() {
   html += recordTopList('Most Career Goals', '⚽', top(players,'goals').map(p=>({name:p.name,cc:p.cc,team:p.team,sub:p.team,val:p.goals})), 'player')
   html += recordTopList('Most Appearances', '🗓️', top(players,'editions').map(p=>({name:p.name,cc:p.cc,team:p.team,sub:p.team,val:p.editions})), 'player')
   html += recordTopList('Most Games Played', '🎽', top(players,'games').map(p=>({name:p.name,cc:p.cc,team:p.team,sub:p.team,val:p.games})), 'player')
+  // Best weighted average rating (min 5 games to qualify)
+  const rated = players.filter(p=>p.ratedGames>=5).sort((a,b)=>b.avgRating-a.avgRating).slice(0,5)
+  html += recordTopList('Best Avg Rating (min 5 games)', '📈', rated.map(p=>({name:p.name,cc:p.cc,team:p.team,sub:`${p.team} · ${p.games}g`,val:p.avgRating.toFixed(2)})), 'player')
   html += '</div>'
 
   return html
