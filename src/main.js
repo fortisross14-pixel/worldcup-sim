@@ -162,7 +162,7 @@ function showMatchPreview(t1, t2, roundName, onStart) {
         <div class="pv-block-head">Stars</div>
         ${stars.length?stars.map(s=>`<div class="scard ${side}" style="margin-bottom:6px">
           <span class="badge badge-${s.tier}">${s.pos}</span>
-          <span class="sinfo"><span class="snm">${s.name}</span><span class="smeta">${TIER_LABELS[s.tier]||s.tier}</span></span>
+          <span class="sinfo"><span class="snm">${s.name}</span><span class="smeta">${s.role||s.pos} · ${TIER_LABELS[s.tier]||s.tier}</span></span>
         </div>`).join(''):'<div style="font-size:11px;color:var(--dim)">No stars</div>'}
       </div>`
   }
@@ -452,7 +452,7 @@ function renderFinalSummary(r) {
   }
   const starCard = (s, side, goalsMap) => `<div class="scard ${side}">
     <span class="spos">${s.pos}</span>
-    <span class="sinfo"><span class="snm">${s.name}</span><span class="smeta">${(goalsMap[s.name]||0)>0?goalsMap[s.name]+'⚽ · ':''}${TIER_LABELS[s.tier]||s.tier}</span></span>
+    <span class="sinfo"><span class="snm">${s.name}</span><span class="smeta">${(goalsMap[s.name]||0)>0?goalsMap[s.name]+'⚽ · ':''}${s.role||s.pos} · ${TIER_LABELS[s.tier]||s.tier}</span></span>
     <span class="srate ${rc(s.rating)}">${s.rating?.toFixed(1)||'—'}</span>
   </div>`
 
@@ -728,6 +728,34 @@ function renderStorylineFeed(limit = 8) {
     <div class="story-feed">${st.map(s => `<div class="story-card">${s.icon} ${s.text}</div>`).join('')}</div>`
 }
 
+
+function renderTournamentEpilogue() {
+  const aw=S.seasonAwards||{}
+  const hist=S.history||[]
+  const current=hist[hist.length-1]
+  const topGame=[...(S.allMatchResults||[])].filter(m=>m.quality).sort((a,b)=>b.quality-a.quality)[0]
+  const top3=[...(S.teams||[])].sort((a,b)=>(b.rating||0)-(a.rating||0)).slice(0,3)
+  const disappointment=top3.find(t=>(S.roundReached?.[t.name]||'Group')==='Group') || top3.find(t=>['Group','Round of 32','Round of 16'].includes(S.roundReached?.[t.name]))
+  const stories=[]
+  if(aw.topScorer){
+    const reached=S.roundReached?.[aw.topScorer.team]||'Group'
+    const finishText={Winner:'the title',Final:'the final',Third:'third place',Fourth:'fourth place','Semi-finals':'the semi-finals','Quarter-finals':'the quarter-finals'}[reached]||'the tournament'
+    stories.push(`<b>${aw.topScorer.name}</b> finished as top scorer with ${aw.topScorer.goals} goals and carried ${aw.topScorer.team} to ${finishText}.`)
+  }
+  const mvp=aw.mvp||aw.offMVP||aw.defMVP
+  if(mvp){
+    const previous=hist.slice(0,-1).filter(h=>(h.awards?.mvp?.name||h.awards?.offMVP?.name||h.awards?.defMVP?.name)===mvp.name).length
+    stories.push(`<b>${mvp.name}</b> was named Player of the Tournament${previous?` for the ${previous+1}${previous===1?'nd':previous===2?'rd':'th'} time. ${previous===1?'No player before had won it twice.':''}`:'.'}`)
+  }
+  if(disappointment) stories.push(`<b>${disappointment.name}</b> were the great disappointment: ranked among the three pre-tournament favorites, they exited in the ${S.roundReached?.[disappointment.name]||'group stage'}.`)
+  if(topGame){
+    const comeback=(topGame.comeback||false)?' with a major comeback':''
+    stories.push(`The best game was <b>${topGame.t1name} ${topGame.g1}–${topGame.g2} ${topGame.t2name}</b>, a ${topGame.quality.toFixed(1)}/10 ${topGame.round||'World Cup'} classic${comeback}.`)
+  }
+  if(!stories.length)return ''
+  return `<div class="sec">🗞️ WORLD CUP REVIEW</div><div class="wc-review"><div class="wc-review-kicker">THE FINAL EDITION</div><div class="wc-review-head">THE STORY OF WORLD CUP ${S.currentYear||''}</div>${stories.map((x,i)=>`<div class="wc-review-story"><span>${i+1}</span><p>${x}</p></div>`).join('')}</div>`
+}
+
 // ── PLAY tab ──────────────────────────────────────────────────
 function renderPlay() {
   const el = $('tab-play'); if (!el) return
@@ -761,6 +789,7 @@ function renderPlay() {
         ${aw.offMVP?`<div class="award-card"><div class="award-icon">🌟</div><div class="award-label">Offensive MVP</div><div class="award-name">${aw.offMVP.name}</div><div class="award-sub">${aw.offMVP.rating} avg · ${aw.offMVP.pos}</div></div>`:''}
         ${aw.defMVP?`<div class="award-card"><div class="award-icon">🛡️</div><div class="award-label">Defensive MVP</div><div class="award-name">${aw.defMVP.name}</div><div class="award-sub">${aw.defMVP.rating} avg · ${aw.defMVP.pos}</div></div>`:''}
       </div>`:''}
+      ${renderTournamentEpilogue()}
       ${renderTopScorers()}
       ${renderStorylineFeed(12)}`
   } else if (p === 'groups') {
@@ -1297,22 +1326,47 @@ function renderHistory() {
 
 // ── GOAT scoring: career body of work ──
 function goatCandidates() {
-  // Legends archive + active stars with careers
-  const all = [...(S.legends || [])]
-  ALL_NATIONS.forEach(n => (n.stars || []).forEach(s => {
-    all.push({ name:s.name, cc:n.cc, teamName:n.name, pos:s.pos, tier:s.tier,
-      careerGoals:(s.careerGoals||0)+(s.goals||0), fame:s.fame||0,
-      medals:s.medals||{}, wcsPlayed:(s.wcsPlayed||0), active:true })
+  const map = new Map()
+  const ensure = p => {
+    if (!p?.name) return null
+    if (!map.has(p.name)) map.set(p.name, {
+      name:p.name, cc:p.cc||'', teamName:p.teamName||p.team||'', pos:p.pos||'', role:p.role||'', tier:p.tier||'common',
+      careerGoals:p.careerGoals||0, fame:p.fame||0, medals:{...(p.medals||{})}, wcsPlayed:p.wcsActuallyPlayed||p.wcsPlayed||0,
+      awards:{...(p.awards||{})}, games:0, matchMVPs:0, ratingSum:0, ratingGames:0, active:!!p.active
+    })
+    return map.get(p.name)
+  }
+  ;(S.legends||[]).forEach(p=>ensure(p))
+  ALL_NATIONS.forEach(n => (n.stars || []).forEach(st => {
+    const p=ensure({ ...st, cc:n.cc, teamName:n.name, active:true })
+    if (!p) return
+    p.careerGoals=Math.max(p.careerGoals||0,st.careerGoals||0)
+    p.fame=Math.max(p.fame||0,st.fame||0)
+    p.medals={...(st.medals||p.medals||{})}; p.awards={...(st.awards||p.awards||{})}
+    p.wcsPlayed=st.wcsActuallyPlayed||st.wcsPlayed||p.wcsPlayed||0
   }))
-  all.forEach(p => {
-    const m = p.medals || {}
-    p.goatScore = Math.round(
-      (m.gold||0)*200 + (m.silver||0)*80 + (m.bronze||0)*40 +
-      (p.careerGoals||0)*12 + (p.fame||0)*0.5 +
-      ({generational:100,legendary:60,epic:30,rare:10}[p.tier]||0)
-    )
+  ;(S.history||[]).forEach(h=>{
+    ;(h.playerSeasons||[]).forEach(ps=>{
+      const p=ensure(ps); if(!p)return
+      p.games += ps.games||0
+      p.ratingSum += (ps.avgRating||0)*(ps.games||0)
+      p.ratingGames += ps.games||0
+    })
+    ;(h.matches||[]).forEach(m=>{ if(m.mvp?.name){ const p=ensure(m.mvp); if(p)p.matchMVPs++ } })
   })
-  return all.filter(p => p.goatScore > 0).sort((a,b)=>b.goatScore-a.goatScore)
+  map.forEach(p=>{
+    const m=p.medals||{}, a=p.awards||{}
+    p.avgRating=p.ratingGames? p.ratingSum/p.ratingGames : 0
+    const titles=m.gold||0, runner=m.silver||0, bronze=m.bronze||0
+    const tournamentMVPs=(a.offMVP||0)+(a.defMVP||0)
+    const achievement = titles*115 + runner*35 + bronze*14
+    const individual = (p.careerGoals||0)*5 + p.matchMVPs*7 + tournamentMVPs*70 + (a.goldenBoot||0)*38
+    const consistency = p.games*1.4 + Math.max(0,p.avgRating-6.5)*p.games*2.2
+    const winnerLeaderBonus = titles>0 ? titles*(18 + tournamentMVPs*18 + Math.min(35,(p.careerGoals||0)*1.2)) : 0
+    const noTeamSuccessPenalty = titles===0 && runner===0 ? .72 : titles===0 ? .88 : 1
+    p.goatScore=Math.round((achievement+individual+consistency+winnerLeaderBonus)*noTeamSuccessPenalty)
+  })
+  return [...map.values()].filter(p=>p.goatScore>0).sort((a,b)=>b.goatScore-a.goatScore)
 }
 
 function renderGOAT() {
@@ -1324,8 +1378,8 @@ function renderGOAT() {
       <div class="goat-rank">${i+1}</div>
       <div class="goat-main">
         <div class="goat-name">${flag(p.cc,18)} ${p.name} ${p.active?'<span class="goat-active">ACTIVE</span>':''}</div>
-        <div class="goat-sub" style="color:${tierColor(p.tier)}">${TIER_LABELS[p.tier]||p.tier} ${p.pos} · ${p.teamName} · ${p.wcsPlayed||0} WCs</div>
-        <div class="goat-stats">⚽ ${p.careerGoals||0} · 🥇${p.medals?.gold||0} 🥈${p.medals?.silver||0} 🥉${p.medals?.bronze||0} · ⚡${p.fame||0}</div>
+        <div class="goat-sub" style="color:${tierColor(p.tier)}">${TIER_LABELS[p.tier]||p.tier} ${p.role||p.pos} · ${p.teamName} · ${p.wcsPlayed||0} WCs</div>
+        <div class="goat-stats">🎮 ${p.games||0} · ⚽ ${p.careerGoals||0} · ⭐ ${p.matchMVPs||0} · Avg ${p.avgRating?p.avgRating.toFixed(2):'—'} · 🥇${p.medals?.gold||0} 🥈${p.medals?.silver||0}</div>
       </div>
       <div class="goat-score">${p.goatScore}</div>
     </div>`).join('')}

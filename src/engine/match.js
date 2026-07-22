@@ -452,17 +452,27 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false, roundName = '')
 
   const allRatings=[...starRatings.team1.map(x=>({...x,team:t1.name})),...starRatings.team2.map(x=>({...x,team:t2.name}))]
   const mvp=allRatings.sort((a,b)=>b.rating-a.rating)[0]||null
-  const roundWeight=roundName.includes('Final')?1.8:roundName.includes('Semi')?1.3:roundName.includes('Quarter')?1:roundName.includes('16')?0.6:roundName.includes('32')?0.35:0
-  const starHeat=[...stars1,...stars2].reduce((a,x)=>a+({generational:.45,legendary:.28,epic:.14,rare:.07}[x?.tier]||0),0)
-  const comebackBonus=timeline.some((ev,i)=>{const before=timeline.slice(0,i);let a=before.filter(x=>x.team===1).length,b=before.filter(x=>x.team===2).length;return (ev.team===1&&b-a>=2)||(ev.team===2&&a-b>=2)})?1.2:0
-  const action=(g1+g2)*.55+(shots1+shots2)*.035+(shotsOnTarget1+shotsOnTarget2)*.06
-  const closeness=Math.max(0,1.2-Math.abs(g1-g2)*.25)
-  const quality=+clamp(1+roundWeight+starHeat+comebackBonus+action+closeness+(penalties?.35:0),1,10).toFixed(1)
+  const isFinalRound=roundName==='Final', isSemi=roundName.includes('Semi')
+  const roundWeight=isFinalRound?1.45:isSemi?1.15:roundName.includes('Quarter')?.82:roundName.includes('16')?.48:roundName.includes('32')?.25:0
+  const starHeat=Math.min(1.15,[...stars1,...stars2].reduce((a,x)=>a+({generational:.30,legendary:.20,epic:.09,rare:.035}[x?.tier]||0),0))
+  const comeback=timeline.some((ev,i)=>{const before=timeline.slice(0,i);let a=before.filter(x=>x.team===1).length,b=before.filter(x=>x.team===2).length;return (ev.team===1&&b-a>=2)||(ev.team===2&&a-b>=2)})
+  const comebackBonus=comeback ? .9 : 0
+  const goals=g1+g2, totalShots=shots1+shots2, onTarget=shotsOnTarget1+shotsOnTarget2
+  const action=Math.min(3.0,goals*.36+totalShots*.018+onTarget*.035)
+  const closeness=Math.max(0,.85-Math.abs(g1-g2)*.22)
+  let q=1+roundWeight+starHeat+comebackBonus+action+closeness+(penalties?.20:0)
+  // 9+ requires a genuinely special cocktail; 10 is reserved for legendary SF/finals.
+  if(q>8.9 && goals<5) q=8.9
+  if(q>9.4 && !(isFinalRound||isSemi)) q=9.4
+  const hasIcon=[...stars1,...stars2].some(x=>['generational','legendary'].includes(x?.tier))
+  const tenEligible=(isFinalRound||isSemi)&&hasIcon&&comeback&&goals>=6&&Math.abs(g1-g2)<=1&&totalShots>=24
+  if(!tenEligible) q=Math.min(q,9.8)
+  const quality=+(tenEligible&&q>=9.65?10:clamp(q,1,10)).toFixed(1)
 
   return {
     t1, t2, g1, g2, winner, penalties, extraTime, effects,
     shots1, shots2, shotsOnTarget1, shotsOnTarget2, xg1, xg2, corners1, corners2, possession1, possession2,
-    yellow1,yellow2,red1,red2,offsides1,offsides2,quality,mvp,
+    yellow1,yellow2,red1,red2,offsides1,offsides2,quality,mvp,comeback,
     starRatings, timeline, tranches,
     mentalityChanges: {
       team1: { before:t1Bef, change:d1, after:t1.mentalityDelta },

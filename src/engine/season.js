@@ -203,7 +203,7 @@ function trackStats(r, phase, gi, round='') {
     corners1:r.corners1, corners2:r.corners2,
     possession1:r.possession1, possession2:r.possession2,
     shotsOnTarget1:r.shotsOnTarget1, shotsOnTarget2:r.shotsOnTarget2,
-    xg1:r.xg1, xg2:r.xg2, quality:r.quality, mvp:r.mvp,
+    xg1:r.xg1, xg2:r.xg2, quality:r.quality, mvp:r.mvp, comeback:r.comeback||false,
     yellow1:r.yellow1, yellow2:r.yellow2, red1:r.red1, red2:r.red2,
     offsides1:r.offsides1, offsides2:r.offsides2
   })
@@ -395,7 +395,10 @@ function finalizeWC() {
     if (nation) syncStarsBack(nation, t.stars)
   })
 
+  const tournamentMVP = offRating >= defRating ? offMVP : defMVP
+  const tournamentMVPRating = Math.max(offRating, defRating)
   S.seasonAwards = {
+    mvp: tournamentMVP ? { name:tournamentMVP.name, rating:tournamentMVPRating.toFixed(1), team:tournamentMVP.teamName, pos:tournamentMVP.pos, role:tournamentMVP.role||'', tier:tournamentMVP.tier } : null,
     topScorer: topScorer ? { name:topScorer.name, goals:topGoals, team:topScorer.teamName, tier:topScorer.tier } : null,
     offMVP:    offMVP    ? { name:offMVP.name,    rating:offRating.toFixed(1), team:offMVP.teamName, pos:offMVP.pos, tier:offMVP.tier } : null,
     defMVP:    defMVP    ? { name:defMVP.name,    rating:defRating.toFixed(1), team:defMVP.teamName, pos:defMVP.pos, tier:defMVP.tier } : null,
@@ -518,9 +521,9 @@ export function startNewWC() {
       || (st.medals?.gold || 0) > 0 || (st.careerGoals || 0) >= 10
     if (notable) {
       S.legends.push({
-        name: st.name, cc: st.cc, teamName: st.teamName, pos: st.pos, tier: st.tier,
+        name: st.name, cc: st.cc, teamName: st.teamName, pos: st.pos, role:st.role||'', tier: st.tier,
         careerGoals: st.careerGoals || 0, fame: st.fame || 0,
-        medals: { ...(st.medals || {}) }, wcsPlayed: st.wcsPlayed || 0,
+        medals: { ...(st.medals || {}) }, awards:{...(st.awards||{})}, allTimeRatings:[...(st.allTimeRatings||[])], wcsActuallyPlayed:st.wcsActuallyPlayed||0, wcsPlayed: st.wcsPlayed || 0,
         retiredWC: S.wcNumber,
       })
     }
