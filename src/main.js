@@ -7,6 +7,8 @@ import {
 } from './engine/season.js'
 import { getEffStats, ovr } from './engine/match.js'
 import { resetNameTracking } from './data/names.js'
+import { previewStory, resultStory } from './engine/drama.js'
+import { wcYear, formatForYear } from './engine/era.js'
 
 // ── Playback state ────────────────────────────────────────────
 let _playbackTimer = null
@@ -42,7 +44,7 @@ window.switchTab = function(tab) {
 
 // ── Phase button ──────────────────────────────────────────────
 function updatePhaseUI() {
-  $('wc-number').textContent = S.wcNumber || 1
+  $('wc-number').textContent = `${S.currentYear||wcYear(S.wcNumber||1)} · WC ${S.wcNumber||1}`
   const btn = $('btn-main')
   const labels = {
     idle:      `▶ Begin WC ${S.wcNumber}`,
@@ -172,6 +174,7 @@ function showMatchPreview(t1, t2, roundName, onStart) {
   const isGroup = S.phase === 'groups'
   const nextMatch = isGroup ? S.groupMatches.find(m => !m.played) : null
   const groupLeft = nextMatch ? S.groupMatches.filter(m => !m.played && m.gi === nextMatch.gi).length : 0
+  const drama = previewStory(S,t1,t2,roundName)
   const skipButtons = isGroup
     ? `<button class="btn btn-secondary" onclick="window.skipPreviewedMatch()">Skip ⏭</button>
        <button class="btn btn-secondary" onclick="window.skipPreviewedGroup()">Group ⏭⏭(${groupLeft})</button>`
@@ -196,6 +199,7 @@ function showMatchPreview(t1, t2, roundName, onStart) {
         </div>
         <div class="score-coin"><div class="sc" style="font-size:20px">VS</div></div>
       </div>
+      <div class="press-box"><div class="press-kicker">THE WORLD FOOTBALL DAILY</div><div class="press-head">${drama.headline}</div><div class="press-body">${drama.body}</div></div>
       <div class="pv-body">
         <div class="pv-teams">
           ${teamDetail(t1,'h')}
@@ -295,6 +299,7 @@ function showGroupResultsPopup(results, roundName, onClose) {
       </div>`).join('') : ''
 
     const events = (r.timeline||[])
+    const drama=resultStory(r,roundName)
     inner.innerHTML = `
       <div class="gr-wrap">
         ${results.length>1?`<div class="gr-tabs">${tabs}</div>`:''}
@@ -329,6 +334,7 @@ function showGroupResultsPopup(results, roundName, onClose) {
                   <span class="gteam">${ev.team===1?r.t1.name.slice(0,3).toUpperCase():r.t2.name.slice(0,3).toUpperCase()}</span>
                 </div>`).join('')}
             </div>
+            <div class="press-box result"><div class="press-kicker">FULL-TIME EDITION</div><div class="press-head">${drama.headline}</div><div class="press-body">${drama.body} · Match quality ${r.quality||'—'}/10${r.mvp?` · MVP ${r.mvp.name}`:''}</div></div>
             ${renderFinalSummary(r)}
             <div class="pb-acts">
               <button class="btn btn-primary" onclick="window._closeGroupResults()">Continue ▶</button>
@@ -365,6 +371,7 @@ function showMatchPopup(r, roundName, onClose) {
   function renderFrame(minute, score1, score2, events, finished) {
     const skipBtn  = finished ? '' : `<button class="btn btn-secondary" onclick="window.skipPlayback()">Skip ⏭</button>`
     const closeBtn = finished ? `<button class="btn btn-primary" onclick="window.closePlayback()">Continue ▶</button>` : ''
+    const drama=finished?resultStory(r,roundName):null
     inner.innerHTML = `
       <div class="pb-card">
         <div class="pb-top">
@@ -398,6 +405,7 @@ function showMatchPopup(r, roundName, onClose) {
                 <span class="gteam">${ev.team===1?t1.name.slice(0,3).toUpperCase():t2.name.slice(0,3).toUpperCase()}</span>
               </div>`).join('')}
         </div>
+        ${finished?`<div class="press-box result"><div class="press-kicker">FULL-TIME EDITION</div><div class="press-head">${drama.headline}</div><div class="press-body">${drama.body} · Match quality ${r.quality||'—'}/10${r.mvp?` · MVP ${r.mvp.name}`:''}</div></div>`:''}
         ${finished ? renderFinalSummary(r) : ''}
         <div class="pb-acts">${skipBtn}${closeBtn}</div>
       </div>`
@@ -451,6 +459,8 @@ function renderFinalSummary(r) {
   return `
     <div class="pb-stats">
       ${statBar('Shots', r.shots1, r.shots2)}
+      ${statBar('On Target', r.shotsOnTarget1||0, r.shotsOnTarget2||0)}
+      ${statBar('xG', r.xg1||0, r.xg2||0)}
       ${statBar('Corners', r.corners1, r.corners2)}
       ${statBar('Possession', r.possession1, r.possession2, '%')}
     </div>
@@ -1329,18 +1339,18 @@ function aggregateTeamRecords() {
     // titles/finishes
     const bump = (name, cc, key) => {
       if (!name) return
-      if (!teams[name]) teams[name] = { name, cc, titles:0, finals:0, semis:0, qualified:0, games:0, gf:0, ga:0, wins:0 }
+      if (!teams[name]) teams[name] = { name, cc, titles:0, finals:0, seconds:0, thirds:0, fourths:0, qf:0, semis:0, qualified:0, games:0, gf:0, ga:0, wins:0 }
       teams[name][key]++
     }
     bump(h.champion, h.cc, 'titles')
-    if (h.runnerUp) bump(h.runnerUp.name, h.runnerUp.cc, 'finals')
+    if (h.runnerUp) { bump(h.runnerUp.name, h.runnerUp.cc, 'finals'); bump(h.runnerUp.name,h.runnerUp.cc,'seconds') }
     // Semifinal appearances = 3rd + 4th place finishers
-    if (h.third) bump(h.third.name, h.third.cc, 'semis')
-    if (h.fourth) bump(h.fourth.name, h.fourth.cc, 'semis')
+    if (h.third) { bump(h.third.name, h.third.cc, 'semis'); bump(h.third.name,h.third.cc,'thirds') }
+    if (h.fourth) { bump(h.fourth.name, h.fourth.cc, 'semis'); bump(h.fourth.name,h.fourth.cc,'fourths') }
     ;(h.teamSeasons||[]).forEach(ts => {
-      if (!teams[ts.name]) teams[ts.name] = { name:ts.name, cc:ts.cc, titles:0, finals:0, semis:0, qualified:0, games:0, gf:0, ga:0, wins:0 }
+      if (!teams[ts.name]) teams[ts.name] = { name:ts.name, cc:ts.cc, titles:0, finals:0, seconds:0, thirds:0, fourths:0, qf:0, semis:0, qualified:0, games:0, gf:0, ga:0, wins:0 }
       const t = teams[ts.name]
-      t.qualified++; t.games += ts.games||0; t.gf += ts.gf||0; t.ga += ts.ga||0; t.wins += ts.w||0
+      if(ts.reached==='Quarter-finals')t.qf++; t.qualified++; t.games += ts.games||0; t.gf += ts.gf||0; t.ga += ts.ga||0; t.wins += ts.w||0
     })
   })
   return Object.values(teams)
@@ -1350,9 +1360,9 @@ function aggregateTeamRecords() {
 function aggregatePlayerRecords() {
   const players = {}
   ;(S.history||[]).forEach(h => (h.playerSeasons||[]).forEach(ps => {
-    if (!players[ps.name]) players[ps.name] = { name:ps.name, cc:ps.cc, team:ps.team, pos:ps.pos, tier:ps.tier, goals:0, games:0, editions:0, ratingSum:0, ratedGames:0 }
+    if (!players[ps.name]) players[ps.name] = { name:ps.name, cc:ps.cc, team:ps.team, pos:ps.pos, tier:ps.tier, goals:0, games:0, editions:0, titles:0, finals:0, mvps:0, ratingSum:0, ratedGames:0 }
     const p = players[ps.name]
-    p.goals += ps.goals||0; p.games += ps.games||0; p.editions++
+    p.goals += ps.goals||0; p.games += ps.games||0; p.editions++; p.titles += ps.reached==='Winner'?1:0; p.finals += ['Winner','Final'].includes(ps.reached)?1:0; p.mvps += (ps.offMVP||0)+(ps.defMVP||0)
     // Weighted rating: sum(avg × games) / total games
     if (ps.avgRating && ps.games) { p.ratingSum += ps.avgRating * ps.games; p.ratedGames += ps.games }
   }))
@@ -1381,45 +1391,24 @@ function recordTopList(title, icon, rows, type) {
   </div>`
 }
 
-function renderRecords() {
-  const r = S.records || {}
-  const teams = aggregateTeamRecords()
-  const players = aggregatePlayerRecords()
-  if (!teams.length && !players.length) return '<div class="empty">No records yet — play some World Cups!</div>'
-
-  const top = (arr, key, n=5) => [...arr].filter(x=>(x[key]||0)>0).sort((a,b)=>(b[key]||0)-(a[key]||0)).slice(0,n)
-
-  // Single-event highlight cards
-  const recCard = (icon, label, value, sub) => `<div class="record-card">
-    <div class="record-icon">${icon}</div>
-    <div class="record-body"><div class="record-label">${label}</div>
-    <div class="record-value">${value}</div>${sub?`<div class="record-sub">${sub}</div>`:''}</div>
-  </div>`
-  let html = '<div class="sec">📊 RECORD BOOK</div><div class="records-grid">'
-  if (r.biggestWin) html += recCard('💥','Biggest Win', `${r.biggestWin.winner} ${r.biggestWin.g1}–${r.biggestWin.g2} ${r.biggestWin.loser}`, `World Cup #${r.biggestWin.wc}`)
-  if (r.mostGoalsOneWC) html += recCard('🔥','Most Goals · One WC', `${r.mostGoalsOneWC.name} — ${r.mostGoalsOneWC.goals}`, `${r.mostGoalsOneWC.team} · WC #${r.mostGoalsOneWC.wc}`)
-  html += '</div>'
-
-  // TEAM records
-  html += '<div class="sec">🏟️ TEAM RECORDS</div><div class="cl-stats-grid">'
-  html += recordTopList('Most Titles', '🏆', top(teams,'titles').map(t=>({name:t.name,cc:t.cc,val:t.titles})), 'team')
-  html += recordTopList('Most Finals', '🥈', top(teams,'finals').map(t=>({name:t.name,cc:t.cc,val:t.finals})), 'team')
-  html += recordTopList('Most Wins (all-time)', '✅', top(teams,'wins').map(t=>({name:t.name,cc:t.cc,val:t.wins})), 'team')
-  html += recordTopList('Most Goals For', '⚽', top(teams,'gf').map(t=>({name:t.name,cc:t.cc,val:t.gf})), 'team')
-  html += recordTopList('Most Appearances', '🗓️', top(teams,'qualified').map(t=>({name:t.name,cc:t.cc,val:t.qualified})), 'team')
-  html += '</div>'
-
-  // PLAYER records
-  html += '<div class="sec">⭐ PLAYER RECORDS</div><div class="cl-stats-grid">'
-  html += recordTopList('Most Career Goals', '⚽', top(players,'goals').map(p=>({name:p.name,cc:p.cc,team:p.team,sub:p.team,val:p.goals})), 'player')
-  html += recordTopList('Most Appearances', '🗓️', top(players,'editions').map(p=>({name:p.name,cc:p.cc,team:p.team,sub:p.team,val:p.editions})), 'player')
-  html += recordTopList('Most Games Played', '🎽', top(players,'games').map(p=>({name:p.name,cc:p.cc,team:p.team,sub:p.team,val:p.games})), 'player')
-  // Best weighted average rating (min 5 games to qualify)
-  const rated = players.filter(p=>p.ratedGames>=5).sort((a,b)=>b.avgRating-a.avgRating).slice(0,5)
-  html += recordTopList('Best Avg Rating (min 5 games)', '📈', rated.map(p=>({name:p.name,cc:p.cc,team:p.team,sub:`${p.team} · ${p.games}g`,val:p.avgRating.toFixed(2)})), 'player')
-  html += '</div>'
-
-  return html
+let recordSub='teams', recordSort='titles'
+window.setRecordSub=t=>{recordSub=t;recordSort=t==='players'?'goals':t==='games'?'quality':'titles';renderHistory()}
+window.setRecordSort=k=>{recordSort=k;renderHistory()}
+function renderRecords(){
+ const teams=aggregateTeamRecords(), players=aggregatePlayerRecords()
+ const games=(S.history||[]).flatMap(h=>(h.matches||h.topGames||[]).map(m=>({...m,wc:h.wcNumber,year:h.year||wcYear(h.wcNumber)})))
+ const tabs=`<div class="sub-tab-row"><button class="sub-tab ${recordSub==='teams'?'active':''}" onclick="setRecordSub('teams')">Teams</button><button class="sub-tab ${recordSub==='players'?'active':''}" onclick="setRecordSub('players')">Players</button><button class="sub-tab ${recordSub==='games'?'active':''}" onclick="setRecordSub('games')">Games</button></div>`
+ const th=(k,l)=>`<th class="num sortable" onclick="setRecordSort('${k}')">${l}${recordSort===k?' ▼':''}</th>`
+ if(recordSub==='players'){
+  const rows=[...players].sort((a,b)=>(b[recordSort]||0)-(a[recordSort]||0)).slice(0,20)
+  return tabs+`<div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Player</th>${th('games','Games')}${th('titles','Titles')}${th('finals','Finals')}${th('avgRating','Avg')}${th('goals','Goals')}${th('mvps','MVPs')}</tr></thead><tbody>${rows.map((p,i)=>`<tr onclick="openStarByName('${p.name.replace(/'/g,"\'")}','${p.team.replace(/'/g,"\'")}')"><td>${i+1}</td><td>${flag(p.cc,14)} <b>${p.name}</b><div class="tiny">${p.team} · ${p.pos}${p.role?' · '+p.role:''}</div></td><td class="num">${p.games}</td><td class="num">${p.titles}</td><td class="num">${p.finals}</td><td class="num">${p.avgRating||'—'}</td><td class="num">${p.goals}</td><td class="num">${p.mvps}</td></tr>`).join('')}</tbody></table></div>`
+ }
+ if(recordSub==='games'){
+  const rows=[...games].sort((a,b)=>(b[recordSort]||0)-(a[recordSort]||0)).slice(0,50)
+  return tabs+`<div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Match</th>${th('quality','Rating')}<th>Round</th><th>MVP</th><th>Edition</th></tr></thead><tbody>${rows.map((g,i)=>`<tr><td>${i+1}</td><td>${flag(g.t1cc,14)} <b>${g.t1name}</b> ${g.g1}–${g.g2} <b>${g.t2name}</b> ${flag(g.t2cc,14)}</td><td class="num">${g.quality||'—'}</td><td>${g.phase==='group'?'Group':g.round||'Knockout'}</td><td>${g.mvp?.name||'—'}</td><td>${g.year}</td></tr>`).join('')}</tbody></table></div>`
+ }
+ const rows=[...teams].sort((a,b)=>(b[recordSort]||0)-(a[recordSort]||0)).slice(0,50)
+ return tabs+`<div class="table-wrap"><table class="data-table"><thead><tr><th>#</th><th>Nation</th>${th('qualified','WCs')}${th('games','Games')}${th('titles','Titles')}${th('seconds','2nd')}${th('thirds','3rd')}${th('fourths','4th')}${th('qf','QF')}${th('gf','Goals')}</tr></thead><tbody>${rows.map((t,i)=>`<tr onclick="openTeamModal('${t.name.replace(/'/g,"\'")}')"><td>${i+1}</td><td>${flag(t.cc,14)} <b>${t.name}</b></td><td class="num">${t.qualified}</td><td class="num">${t.games}</td><td class="num">${t.titles}</td><td class="num">${t.seconds}</td><td class="num">${t.thirds}</td><td class="num">${t.fourths}</td><td class="num">${t.qf}</td><td class="num">${t.gf}</td></tr>`).join('')}</tbody></table></div>`
 }
 
 function renderTournamentsHistory() {
@@ -1459,14 +1448,14 @@ function renderTournamentsHistory() {
         ${flag(t.cc,16)} <span class="podium-name ${cls}">${t.name}</span>
       </div>` : ''
       return `<div class="history-card">
-        <div class="history-wc">WORLD CUP #${h.wcNumber}${h.host?` · 🏟️ ${h.host}`:''}</div>
+        <div class="history-wc">${h.year||wcYear(h.wcNumber)} · WORLD CUP #${h.wcNumber}${h.host?` · 🏟️ ${h.host}`:''}</div>
         <div class="podium">
           ${podium('🥇',{name:h.champion,cc:h.cc},'gold')}
           ${podium('🥈',h.runnerUp,'silver')}
           ${podium('🥉',h.third,'bronze')}
           ${podium('4',h.fourth,'fourth')}
         </div>
-        <div style="font-size:11px;color:var(--txt3);margin-top:6px">${h.totalGoals||0} goals${h.awards?.topScorer?` · ⚽ ${h.awards.topScorer.name} (${h.awards.topScorer.goals})`:''}</div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:6px">${h.totalGoals||0} goals · Avg quality ${h.averageQuality||'—'}/10${h.awards?.topScorer?` · ⚽ ${h.awards.topScorer.name} (${h.awards.topScorer.goals})`:''}</div>
       </div>`
     }).join('')}
 
@@ -1486,14 +1475,15 @@ function renderTournamentsHistory() {
 
 // ── INTER-WC SCREEN ───────────────────────────────────────────
 function showInterWC() {
-  const { retiring, debuting, host, ratingChanges } = startNewWC()
+  const { retiring, debuting, host, ratingChanges, era, year, format } = startNewWC()
   const NOTABLE = new Set(['generational','legendary','epic','rare'])
   const notableRet = retiring.filter(s=>NOTABLE.has(s.tier))
   const notableDeb = debuting.filter(s=>NOTABLE.has(s.tier))
   const hostNation = ALL_NATIONS.find(n => n.name === host)
   $('interwc-content').innerHTML = `
     <div class="hero-title" style="font-size:20px;margin-bottom:4px"><span class="l1">BETWEEN</span> <span class="l2">CUPS</span></div>
-    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">WC #${S.wcNumber} preparations</div>
+    <div style="font-size:12px;color:var(--txt2);margin-bottom:14px">${year} · WC #${S.wcNumber} · ${format?.label||''}</div>
+    ${era?.powers?.length?`<div class="press-box"><div class="press-kicker">ERA WATCH</div><div class="press-head">NEW POWERS RISE</div><div class="press-body">${era.powers.map(p=>`${flag(p.cc,14)} ${p.name} (+${p.boost})`).join(' · ')}</div></div>`:''}
 
     <div class="interwc-host">
       <div style="font-size:32px">${flag(host, 32)}</div>
@@ -1585,7 +1575,7 @@ window.startInSlot = async function(n) {
   S.teams = []; S.groups = []; S.groupMatches = []; S.knockoutRounds = []
   S.history = []; S.champion = null; S.roundReached = {}
   S.scorers = {}; S.teamGoals = {}; S.teamGoalsConceded = {}; S.allMatchResults = []; S.seasonAwards = {}
-  S.storylines = []; S.legends = []; S.records = {}
+  S.storylines = []; S.legends = []; S.records = {}; S.era=null; S.currentYear=1930; S.tournamentFormat=formatForYear(1930)
   resetNameTracking()
   ALL_NATIONS.forEach(nat => { delete nat.stars; delete nat.stats; delete nat._lastRating })
   initAllStars(1)
@@ -1598,7 +1588,7 @@ window.startInSlot = async function(n) {
 window.continueInSlot = async function(n) {
   try {
     await loadSlot(n)
-    if (!ALL_NATIONS.some(nat=>nat.stars?.length)) initAllStars(S.wcNumber||1)
+    S.currentYear=S.currentYear||wcYear(S.wcNumber||1); S.tournamentFormat=S.tournamentFormat||formatForYear(S.currentYear); if (!ALL_NATIONS.some(nat=>nat.stars?.length)) initAllStars(S.wcNumber||1)
     document.body.classList.remove('slot-select-mode')
     updatePhaseUI(); switchTab('play')
     if (S.groups?.length) renderGroups()

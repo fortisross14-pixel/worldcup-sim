@@ -414,3 +414,7 @@ table.data-table .c-name .nstripe{position:absolute;left:0;top:50%;transform:tra
 
 #toast,.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);border:2px solid var(--yolk);color:var(--yolk);font-family:var(--font-pop);font-size:12px;padding:8px 16px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:4px 4px 0 var(--hot)}
 #toast.show,.toast.show{opacity:1}
+
+/* Alternate-history press and records upgrade */
+.press-box{margin:12px 14px;padding:13px 15px;border:1px solid var(--gold3);background:linear-gradient(135deg,rgba(255,203,43,.09),rgba(255,255,255,.015));border-radius:8px}
+.press-box.result{margin-top:12px}.press-kicker{font-family:var(--font-head);font-size:9px;letter-spacing:.18em;color:var(--gold3);margin-bottom:5px}.press-head{font-family:var(--font-head);font-size:18px;line-height:1.05;color:var(--gold2);text-transform:uppercase}.press-body{font-family:var(--font-body);font-size:12px;color:var(--txt2);line-height:1.45;margin-top:6px}.sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--gold)}.tiny{font-size:9px;color:var(--txt3);margin-top:2px}

@@ -4,6 +4,7 @@ import { simMatch, rand, clamp, shuffle, ovr, getEffStats, STAR_MULT, STAR_BONUS
 import { initAllStars, ageAllStars, linkStarsToTeam, syncStarsBack, TIER_ORDER } from './stars.js'
 import { resetNameTracking } from '../data/names.js'
 import { addStory, qualifiedStreak, editionsSinceTitle, isLastDance, careerLine } from './storylines.js'
+import { ensureEra, eraPower, wcYear, formatForYear } from './era.js'
 
 // ── Gaussian helper ───────────────────────────────────────────
 function gauss(sig = 3.5, maxAbs = 12) {
@@ -41,7 +42,8 @@ function starQualityBonus(nation) {
 function seasonRating(nation) {
   const hist = histPts(nation.name)
   const stars = starQualityBonus(nation)
-  const raw = nation.base * 0.80 + hist + stars
+  const era = eraPower(S,nation.name)
+  const raw = nation.base * 0.80 + hist + stars + (era?.boost||0)
   return clamp(Math.round(raw + gauss(3, 7)), 40, 120)
 }
 
@@ -54,6 +56,10 @@ function rollStats(tier) {
 
 // ── Qualification ─────────────────────────────────────────────
 export function runQualification() {
+  S.currentYear = wcYear(S.wcNumber)
+  S.tournamentFormat = formatForYear(S.currentYear)
+  ensureEra(S)
+  const targetTeams = S.tournamentFormat.teams
   // Re-roll stats for each nation each WC (form varies)
   ALL_NATIONS.forEach(n => { n.stats = rollStats(n.tier || 'rest') })
 
@@ -92,8 +98,13 @@ export function runQualification() {
   const hostNation = ALL_NATIONS.find(n => n.name === S.hostNation)
   const hostConf = hostNation?.conf
 
-  // Build team objects (32) with host & confederation stat bonuses
-  S.teams = shuffle(qualified.slice(0, 32)).map(nation => {
+  // Fill or trim globally to the format target after confederation selection.
+  if (qualified.length < targetTeams) {
+    const extras = ALL_NATIONS.filter(n=>!qualSet.has(n.name)).map(n=>({n,score:seasonRating(n)+gauss(2,5)})).sort((a,b)=>b.score-a.score)
+    extras.slice(0,targetTeams-qualified.length).forEach(x=>qualified.push(x.n))
+  }
+  // Build team objects with host & confederation stat bonuses
+  S.teams = shuffle(qualified.slice(0, targetTeams)).map(nation => {
     const isHost = nation.name === S.hostNation
     const sameConf = !isHost && nation.conf === hostConf
     // Host +8 to all stats, same-confederation +4
@@ -148,36 +159,19 @@ export function runQualification() {
 
 // ── Draw 8 groups of 4 ────────────────────────────────────────
 export function drawGroups() {
-  const sorted = [...S.teams].sort((a, b) => b.rating - a.rating)
-  const pot1 = sorted.slice(0, 8)   // top 8 seeded, one per group
-  const rest = shuffle(sorted.slice(8))
-
-  S.groups = Array.from({ length: 8 }, (_, i) => ({
-    id: String.fromCharCode(65 + i),
-    teams: [pot1[i]]
-  }))
-
-  // Distribute rest: max 1 per confederation per group where possible
-  for (const team of rest) {
-    const eligible = S.groups.filter(g => {
-      if (g.teams.length >= 4) return false
-      return !g.teams.some(t => t.conf === team.conf)
-    })
-    const fallback = S.groups.filter(g => g.teams.length < 4)
-    const target = eligible.length
-      ? eligible[Math.floor(Math.random() * eligible.length)]
-      : fallback[Math.floor(Math.random() * fallback.length)]
-    if (target) target.teams.push(team)
+  const fmt=S.tournamentFormat||formatForYear(wcYear(S.wcNumber))
+  const sorted=[...S.teams].sort((a,b)=>b.rating-a.rating)
+  const groupCount=fmt.groups
+  const pot1=sorted.slice(0,groupCount), rest=shuffle(sorted.slice(groupCount))
+  S.groups=Array.from({length:groupCount},(_,i)=>({id:String.fromCharCode(65+i),teams:[pot1[i]]}))
+  for(const team of rest){
+    const eligible=S.groups.filter(g=>g.teams.length<4&&!g.teams.some(t=>t.conf===team.conf))
+    const fallback=S.groups.filter(g=>g.teams.length<4)
+    const pool=eligible.length?eligible:fallback
+    const target=pool[Math.floor(Math.random()*pool.length)]; if(target)target.teams.push(team)
   }
-
-  // Build match schedule (each team plays other 3 once)
-  S.groupMatches = []
-  S.groups.forEach((grp, gi) => {
-    const t = grp.teams
-    ;[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach(([a, b]) => {
-      if (t[a] && t[b]) S.groupMatches.push({ gi, t1:t[a], t2:t[b], played:false, result:null })
-    })
-  })
+  S.groupMatches=[]
+  S.groups.forEach((grp,gi)=>{const t=grp.teams;[[0,1],[2,3],[0,2],[1,3],[0,3],[1,2]].forEach(([a,b])=>{if(t[a]&&t[b])S.groupMatches.push({gi,t1:t[a],t2:t[b],played:false,result:null})})})
 }
 
 // ── Group stats update ────────────────────────────────────────
@@ -192,22 +186,26 @@ export function updateGroupStats(result) {
 
 export function playGroupMatch(match) {
   if (match.played) return null
-  const result = simMatch(match.t1, match.t2, true, false)
+  const result = simMatch(match.t1, match.t2, true, false, 'Group Stage')
   match.played = true; match.result = result
   updateGroupStats(result)
-  trackStats(result, 'group', match.gi)
+  trackStats(result, 'group', match.gi, 'Group Stage')
   autoSave(); return result
 }
 
-function trackStats(r, phase, gi) {
+function trackStats(r, phase, gi, round='') {
   S.allMatchResults = S.allMatchResults || []
   S.allMatchResults.push({
     t1id:r.t1.name, t1name:r.t1.name, t1cc:r.t1.cc,
     t2id:r.t2.name, t2name:r.t2.name, t2cc:r.t2.cc,
-    g1:r.g1, g2:r.g2, phase, gi,
+    g1:r.g1, g2:r.g2, phase, gi, round,
     shots1:r.shots1, shots2:r.shots2,
     corners1:r.corners1, corners2:r.corners2,
-    possession1:r.possession1
+    possession1:r.possession1, possession2:r.possession2,
+    shotsOnTarget1:r.shotsOnTarget1, shotsOnTarget2:r.shotsOnTarget2,
+    xg1:r.xg1, xg2:r.xg2, quality:r.quality, mvp:r.mvp,
+    yellow1:r.yellow1, yellow2:r.yellow2, red1:r.red1, red2:r.red2,
+    offsides1:r.offsides1, offsides2:r.offsides2
   })
   S.teamGoals = S.teamGoals || {}
   S.teamGoalsConceded = S.teamGoalsConceded || {}
@@ -240,44 +238,31 @@ export function groupStandings(grp) {
 
 // ── Build knockout (top 2 from each of 8 groups = 16 → R16) ──
 export function buildKnockout() {
-  const winners = [], runners = []
-  S.groups.forEach(grp => {
-    const standings = groupStandings(grp)
-    if (standings[0]) { winners.push({ team: standings[0], gi: grp.id }); S.roundReached[standings[0].name] = 'Round of 16' }
-    if (standings[1]) { runners.push({ team: standings[1], gi: grp.id }); S.roundReached[standings[1].name] = 'Round of 16' }
-    standings.slice(2).forEach(t => { S.roundReached[t.name] = 'Group' })
+  const fmt=S.tournamentFormat||formatForYear(wcYear(S.wcNumber))
+  const rankedGroups=S.groups.map(grp=>({grp,standings:groupStandings(grp)}))
+  const qualifiers=[]
+  rankedGroups.forEach(({grp,standings})=>{
+    standings.slice(0,2).forEach(t=>qualifiers.push(t))
+    standings.slice(2).forEach(t=>{S.roundReached[t.name]='Group'})
   })
-
-  // ── Group-exit storylines ──
-  S.teams.forEach(t => {
-    if (S.roundReached[t.name] !== 'Group') return
-    if (t.tier === 'top') addStory('💥', `SHOCK: ${t.name} are eliminated in the group stage!`)
-    if (t.isHost) addStory('😢', `Hosts ${t.name} crash out in the groups.`)
-    ;(t.stars || []).forEach(st => {
-      if (isLastDance(st)) addStory('👋', `That was the last dance for ${st.name} (${t.name}) — ${careerLine(st)}. A group-stage farewell.`)
-    })
-  })
-
-  // Draw: each group winner gets a random runner-up from a DIFFERENT group.
-  const shuffledWinners = shuffle([...winners])
-  const availableRunners = shuffle([...runners])
-  const matches = []
-  for (const w of shuffledWinners) {
-    // pick a runner-up not from the same group, if possible
-    let idx = availableRunners.findIndex(r => r.gi !== w.gi)
-    if (idx === -1) idx = 0
-    const r = availableRunners.splice(idx, 1)[0]
-    matches.push({ t1: w.team, t2: r.team, played:false, result:null })
+  if(fmt.knockout>qualifiers.length){
+    const thirds=rankedGroups.map(x=>x.standings[2]).filter(Boolean).sort((a,b)=>(b.pts||0)-(a.pts||0)||(b.gd||0)-(a.gd||0)||(b.gf||0)-(a.gf||0))
+    qualifiers.push(...thirds.slice(0,fmt.knockout-qualifiers.length))
   }
-  S.knockoutRounds = [{ name:'Round of 16', matches }]
-  autoSave()
+  const qset=new Set(qualifiers.map(t=>t.name)); S.teams.forEach(t=>{if(!qset.has(t.name))S.roundReached[t.name]='Group'})
+  const roundName=fmt.knockout===32?'Round of 32':fmt.knockout===16?'Round of 16':'Quarter-finals'
+  qualifiers.forEach(t=>S.roundReached[t.name]=roundName)
+  const seeded=[...qualifiers].sort((a,b)=>b.rating-a.rating)
+  const top=seeded.slice(0,seeded.length/2), bottom=shuffle(seeded.slice(seeded.length/2))
+  const matches=top.map((t,i)=>({t1:t,t2:bottom[i],played:false,result:null}))
+  S.knockoutRounds=[{name:roundName,matches}]; autoSave()
 }
 
 export function playKnockoutMatch(match) {
   if (match.played) return null
-  const result = simMatch(match.t1, match.t2, false, true)
+  const result = simMatch(match.t1, match.t2, false, true, S.knockoutRounds.find(r=>r.matches.includes(match))?.name||'Knockout')
   match.played = true; match.result = result
-  trackStats(result, 'knockout')
+  trackStats(result, 'knockout', null, S.knockoutRounds.find(r=>r.matches.includes(match))?.name||'Knockout')
   autoSave(); return result
 }
 
@@ -331,7 +316,7 @@ export function advanceKnockout() {
     return
   }
 
-  const nextName = { 'Round of 16':'Quarter-finals', 'Quarter-finals':'Semi-finals', 'Semi-finals':'Final' }[round.name] || 'Final'
+  const nextName = { 'Round of 32':'Round of 16', 'Round of 16':'Quarter-finals', 'Quarter-finals':'Semi-finals', 'Semi-finals':'Final' }[round.name] || 'Final'
   const newMatches = []
   for (let i = 0; i < winners.length; i += 2)
     newMatches.push({ t1:winners[i], t2:winners[i+1], played:false, result:null })
@@ -465,7 +450,7 @@ function finalizeWC() {
     if (games > 0 || (S.scorers[s.name]||0) > 0) {
       const avg = games ? (s.ratings.reduce((a,b)=>a+b,0)/games) : 0
       playerSeasons.push({
-        name: s.name, cc: t.cc, team: t.name, pos: s.pos, tier: s.tier,
+        name: s.name, cc: t.cc, team: t.name, pos: s.pos, role:s.role||'', tier: s.tier,
         goals: S.scorers[s.name] || 0, games,
         avgRating: avg ? +avg.toFixed(1) : 0,
         reached: S.roundReached[t.name] || 'Group',
@@ -477,7 +462,7 @@ function finalizeWC() {
 
   S.history = S.history || []
   S.history.push({
-    wcNumber: S.wcNumber,
+    wcNumber: S.wcNumber, year:S.currentYear||wcYear(S.wcNumber),
     champion: S.champion.name, cc: S.champion.cc,
     runnerUp: rankByFinish[1] || null,
     third: rankByFinish[2] || null,
@@ -489,6 +474,10 @@ function finalizeWC() {
     awards: { ...S.seasonAwards },
     teamSeasons,
     playerSeasons,
+    era: JSON.parse(JSON.stringify(S.era||null)),
+    matches: (S.allMatchResults||[]).map(m=>({...m})),
+    topGames: [...(S.allMatchResults||[])].filter(m=>m.quality).sort((a,b)=>b.quality-a.quality).slice(0,5),
+    averageQuality: (S.allMatchResults||[]).length ? +(S.allMatchResults.reduce((a,m)=>a+(m.quality||0),0)/S.allMatchResults.length).toFixed(2) : 0,
   })
   autoSave()
 }
@@ -496,6 +485,7 @@ function finalizeWC() {
 // ── Start new WC cycle ────────────────────────────────────────
 export function startNewWC() {
   S.wcNumber = (S.wcNumber || 1) + 1
+  S.currentYear=wcYear(S.wcNumber); S.tournamentFormat=formatForYear(S.currentYear); ensureEra(S)
   S.phase = 'idle'; S.champion = null
   S.groups = []; S.groupMatches = []; S.knockoutRounds = []
   S.scorers = {}; S.teamGoals = {}; S.teamGoalsConceded = {}
@@ -538,7 +528,7 @@ export function startNewWC() {
 
   // Stash the most recent transition for the Tournament → Transfers tab
   S.lastTransition = {
-    wcNumber: S.wcNumber,
+    wcNumber: S.wcNumber, year:S.currentYear||wcYear(S.wcNumber),
     retiring: retiring.map(st => ({
       name: st.name, cc: st.cc, teamName: st.teamName, pos: st.pos, tier: st.tier,
       careerGoals: st.careerGoals || 0, fame: st.fame || 0,
@@ -550,7 +540,7 @@ export function startNewWC() {
     })),
   }
 
-  return { retiring, debuting, host: S.hostNation, ratingChanges: ratingChanges.slice(0, 8) }
+  return { retiring, debuting, host: S.hostNation, ratingChanges: ratingChanges.slice(0, 8), era:S.era, year:S.currentYear, format:S.tournamentFormat }
 }
 
 export { initAllStars, ageAllStars }

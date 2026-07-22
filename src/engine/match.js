@@ -133,8 +133,22 @@ export function getEffStats(team, isKO = false) {
     s.mental    = clamp(s.mental    + (fx.mental    || 0), 10, 130)
     s.setPieces = clamp(s.setPieces + (fx.setPieces || 0), 10, 130)
   }
-
-  return s
+  // Tactical-role fit: coherent combinations become more than the sum of their parts.
+  const roles=(team.stars||[]).map(x=>x?.role).filter(Boolean)
+  const style=(team.soul?.name||'').toLowerCase()
+  const has=r=>roles.includes(r)
+  if(style.includes('tiki')){
+    if(has('False Nine')) { s.attack+=3; s.mental+=3 }
+    if(roles.filter(r=>r==='Deep-Lying Playmaker').length>=1) { s.mental+=4; s.defense+=2 }
+    if(has('Ball-Playing Centre-Back')) { s.mental+=2; s.defense+=2 }
+    if(has('Striker')&&has('Box-to-Box')&&has('Physical Centre-Back')) { s.mental-=3; s.attack-=2 }
+  } else {
+    if(has('Winger')&&has('Striker')) { s.attack+=5; s.setPieces+=2 }
+    if(has('Box-to-Box')) { s.stamina+=3; s.mental+=1 }
+    if(has('Physical Centre-Back')) s.defense+=3
+  }
+  if(has('Sweeper Keeper')) { s.mental+=2; s.defense+=1 }
+  return Object.fromEntries(Object.entries(s).map(([k,v])=>[k,clamp(v,10,130)]))
 }
 
 // ── Match statistics (shots / possession / corners) ───────────
@@ -163,11 +177,11 @@ function computeMatchStats(myE, oppE) {
   let corners30 = (corners60 / 2) + dampDiff(stamDiff) * 0.18 + gaussRand(0.7)
   corners30 = clamp(corners30, 0, 10)
 
-  return {
-    shots:   Math.round(shots60 + shots30),
-    corners: Math.round(corners60 + corners30),
-    possShare: clamp(poss60 * 0.67 + poss30 * 0.33, 0.25, 0.75)
-  }
+  const shots=Math.round(shots60+shots30)
+  const accuracy=clamp(.27+(myE.attack-70)*.003+(myE.mental-70)*.0015, .20, .58)
+  const shotsOnTarget=clamp(Math.round(shots*accuracy+gaussRand(1)),0,shots)
+  const xg=Math.max(.05, shotsOnTarget*.22 + Math.max(0,shots-shotsOnTarget)*.035 + Math.max(0,myE.attack-oppE.defense)*.018)
+  return { shots, shotsOnTarget, xg:+xg.toFixed(2), corners:Math.round(corners60+corners30), possShare:clamp(poss60*.67+poss30*.33,.25,.75) }
 }
 
 // ── Stats → raw goals ─────────────────────────────────────────
@@ -178,7 +192,7 @@ function statsToGoals(matchStats, myE, possessionPct, oppE) {
   const gapBonus = clamp(skillGap * 0.005, -0.05, 0.13)
   const convMax = clamp(0.13 + spGap / 1400 + gapBonus, 0.09, 0.36)
   const conv = Math.random() * convMax
-  let shotGoals   = matchStats.shots * conv
+  let shotGoals   = matchStats.xg * (0.62 + Math.random()*0.78) + matchStats.shotsOnTarget * conv * 0.35
   let possGoals   = possessionPct >= 72 ? 1 : 0
   let cornerConv  = clamp(0.025 + spGap * 0.0008, 0.01, 0.07)
   let cornerGoals = matchStats.corners * cornerConv
@@ -315,7 +329,7 @@ function pickScorer(stars, team) {
   return team.name + ' (sub)'
 }
 
-export function simMatch(t1, t2, allowDraw = true, isKO = false) {
+export function simMatch(t1, t2, allowDraw = true, isKO = false, roundName = '') {
   const e1 = getEffStats(t1, isKO)
   const e2 = getEffStats(t2, isKO)
   const effects = []
@@ -331,6 +345,12 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
   const possession2 = 100 - possession1
   const shots1 = m1.shots, shots2 = m2.shots
   const corners1 = m1.corners, corners2 = m2.corners
+  const shotsOnTarget1=m1.shotsOnTarget, shotsOnTarget2=m2.shotsOnTarget
+  const xg1=m1.xg, xg2=m2.xg
+  const yellow1=clamp(Math.round(2+gaussRand(1.2)+(e2.attack-e1.defense)*.025),0,7)
+  const yellow2=clamp(Math.round(2+gaussRand(1.2)+(e1.attack-e2.defense)*.025),0,7)
+  const red1=Math.random()<.035+yellow1*.006?1:0, red2=Math.random()<.035+yellow2*.006?1:0
+  const offsides1=clamp(Math.round(shots1*.16+gaussRand(1)),0,7), offsides2=clamp(Math.round(shots2*.16+gaussRand(1)),0,7)
 
   // Stage 2: raw goals
   let raw1 = statsToGoals(m1, e1, possession1, e2)
@@ -430,9 +450,19 @@ export function simMatch(t1, t2, allowDraw = true, isKO = false) {
     return { minute, score1, score2, newGoals }
   })
 
+  const allRatings=[...starRatings.team1.map(x=>({...x,team:t1.name})),...starRatings.team2.map(x=>({...x,team:t2.name}))]
+  const mvp=allRatings.sort((a,b)=>b.rating-a.rating)[0]||null
+  const roundWeight=roundName.includes('Final')?1.8:roundName.includes('Semi')?1.3:roundName.includes('Quarter')?1:roundName.includes('16')?0.6:roundName.includes('32')?0.35:0
+  const starHeat=[...stars1,...stars2].reduce((a,x)=>a+({generational:.45,legendary:.28,epic:.14,rare:.07}[x?.tier]||0),0)
+  const comebackBonus=timeline.some((ev,i)=>{const before=timeline.slice(0,i);let a=before.filter(x=>x.team===1).length,b=before.filter(x=>x.team===2).length;return (ev.team===1&&b-a>=2)||(ev.team===2&&a-b>=2)})?1.2:0
+  const action=(g1+g2)*.55+(shots1+shots2)*.035+(shotsOnTarget1+shotsOnTarget2)*.06
+  const closeness=Math.max(0,1.2-Math.abs(g1-g2)*.25)
+  const quality=+clamp(1+roundWeight+starHeat+comebackBonus+action+closeness+(penalties?.35:0),1,10).toFixed(1)
+
   return {
     t1, t2, g1, g2, winner, penalties, extraTime, effects,
-    shots1, shots2, corners1, corners2, possession1, possession2,
+    shots1, shots2, shotsOnTarget1, shotsOnTarget2, xg1, xg2, corners1, corners2, possession1, possession2,
+    yellow1,yellow2,red1,red2,offsides1,offsides2,quality,mvp,
     starRatings, timeline, tranches,
     mentalityChanges: {
       team1: { before:t1Bef, change:d1, after:t1.mentalityDelta },

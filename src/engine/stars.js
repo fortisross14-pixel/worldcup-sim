@@ -1,6 +1,8 @@
-import { ALL_NATIONS, rollStarTier } from '../data/nations.js'
+import { ALL_NATIONS, rollStarTier, getSoul } from '../data/nations.js'
 import { STAR_BONUSES, GOAL_DIST, SAVE_PROB, rand } from './match.js'
 import { getPlayerName, resetNameTracking } from '../data/names.js'
+import { S } from '../store.js'
+import { eraStarMultiplier, wcYear } from './era.js'
 
 export const TIER_LABELS = {
   generational:'Generational', legendary:'Legendary', epic:'Epic',
@@ -12,11 +14,8 @@ export const TIER_COLORS = {
 }
 export const TIER_ORDER = ['generational','legendary','epic','rare','uncommon','common']
 
-// Career lifespan ranges by tier (in WCs)
-const LIFESPANS = {
-  generational:[4,7], legendary:[3,6], epic:[2,5],
-  rare:[2,4], uncommon:[2,3], common:[1,3]
-}
+// Career length is independent from rarity; position affects longevity instead.
+const POSITION_LIFESPANS = { GK:[3,7], DEF:[2,6], MID:[2,5], FWD:[2,5] }
 
 // Career phase multiplier
 export function careerMult(wcsPlayed, wcsTotal) {
@@ -28,10 +27,25 @@ export function careerMult(wcsPlayed, wcsTotal) {
 
 const POSITIONS = ['FWD','FWD','FWD','MID','MID','MID','DEF','DEF','GK']
 
+function pickRole(pos,nation){
+  const style=(getSoul(nation.name)?.name||'').toLowerCase()
+  const choose=a=>a[Math.floor(Math.random()*a.length)]
+  if(pos==='FWD') return style.includes('tiki')?choose(['False Nine','Winger','False Nine']):choose(['Striker','Winger','Striker'])
+  if(pos==='MID') return style.includes('tiki')?choose(['Deep-Lying Playmaker','Advanced Playmaker','Deep-Lying Playmaker']):choose(['Box-to-Box','Advanced Playmaker','Ball Winner'])
+  if(pos==='DEF') return style.includes('tiki')?choose(['Ball-Playing Centre-Back','Full-Back']):choose(['Physical Centre-Back','Full-Back','Ball-Playing Centre-Back'])
+  return choose(['Sweeper Keeper','Shot Stopper','Shot Stopper'])
+}
+
 export function genStar(nation, wcNumber, overrideWcsPlayed = null) {
-  const tier = rollStarTier(nation.tier || 'rest')
+  let tier = rollStarTier(nation.tier || 'rest')
+  const year = wcYear(wcNumber||1)
+  // Elite rarity is scarce in early football and era powers get extra lottery chances.
+  const attempts = Math.random() < Math.min(.72, .18 * (eraStarMultiplier(S,nation.name)-1)) ? 2 : 1
+  for (let i=1;i<attempts;i++) { const alt=rollStarTier(nation.tier||'rest'); if (TIER_ORDER.indexOf(alt)<TIER_ORDER.indexOf(tier)) tier=alt }
+  if (year < 1954 && ['generational','legendary'].includes(tier)) tier = Math.random()<.2?'epic':'rare'
+  else if (year < 1966 && tier==='generational') tier='legendary'
   const pos  = POSITIONS[Math.floor(Math.random() * POSITIONS.length)]
-  const [minL, maxL] = LIFESPANS[tier] || [1, 3]
+  const [minL, maxL] = POSITION_LIFESPANS[pos] || [2,5]
   const wcsTotal  = rand(minL, maxL)
   // Everyone starts fresh: no fictional prior World Cups. wcsTotal just sets
   // how many editions their career will span from their debut.
@@ -45,7 +59,7 @@ export function genStar(nation, wcNumber, overrideWcsPlayed = null) {
   return {
     id: `${nation.name}_${tier}_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
     name: getPlayerName(nation.cc),
-    pos, tier,
+    pos, role: pickRole(pos, nation), tier,
     statBonus: { ...(STAR_BONUSES[pos]?.[tier] || STAR_BONUSES[pos]?.common || {}) },
     careerMult: initialMult,
     teamName: nation.name, cc: nation.cc,

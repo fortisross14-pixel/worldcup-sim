@@ -73,6 +73,10 @@ export const S = {
   seasonAwards: {},
   history: [],
   nextId: 1,
+  era: null,
+  currentYear: 1930,
+  tournamentFormat: null,
+  recordsView: 'teams',
 }
 
 import { ALL_NATIONS } from './data/nations.js'
