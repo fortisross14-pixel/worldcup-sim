@@ -81,6 +81,70 @@ export const S = {
 
 import { ALL_NATIONS } from './data/nations.js'
 
+
+// Reconnect duplicated objects created by JSON save/load and rebuild group tables.
+// JSON serialization preserves values but not shared references, so after loading a
+// save S.groups, S.groupMatches and S.knockoutRounds may each contain separate
+// copies of the same team. Match results must always update the canonical S.teams
+// objects used by the standings UI.
+export function normalizeTournamentState() {
+  if (!Array.isArray(S.teams)) S.teams = []
+  // Repair qualification saves created while duplicate nation definitions were
+  // present. Nation name is the stable identity everywhere in the simulator.
+  S.teams = Array.from(new Map(S.teams.filter(Boolean).map(t => [t.name, t])).values())
+  const teamByName = new Map(S.teams.map(t => [t.name, t]))
+  const canonical = ref => {
+    if (!ref) return ref
+    const name = typeof ref === 'string' ? ref : ref.name
+    return teamByName.get(name) || ref
+  }
+
+  // Groups should point at canonical team objects.
+  ;(S.groups || []).forEach(group => {
+    group.teams = Array.from(new Map((group.teams || []).map(canonical).filter(Boolean).map(t => [t.name, t])).values())
+  })
+
+  // Rebuild group standings from played matches. This also repairs saves made
+  // while the old reference bug was present.
+  S.teams.forEach(t => {
+    t.w = 0; t.d = 0; t.l = 0; t.gf = 0; t.ga = 0; t.gd = 0; t.pts = 0
+  })
+  ;(S.groupMatches || []).forEach(match => {
+    match.t1 = canonical(match.t1)
+    match.t2 = canonical(match.t2)
+    if (match.result) {
+      match.result.t1 = match.t1
+      match.result.t2 = match.t2
+      if (match.result.winner) match.result.winner = canonical(match.result.winner)
+    }
+    if (!match.played || !match.result) return
+    const { g1 = 0, g2 = 0 } = match.result
+    const t1 = match.t1, t2 = match.t2
+    if (!t1 || !t2) return
+    t1.gf += g1; t1.ga += g2; t1.gd = t1.gf - t1.ga
+    t2.gf += g2; t2.ga += g1; t2.gd = t2.gf - t2.ga
+    if (g1 > g2) { t1.w++; t1.pts += 3; t2.l++ }
+    else if (g2 > g1) { t2.w++; t2.pts += 3; t1.l++ }
+    else { t1.d++; t1.pts++; t2.d++; t2.pts++ }
+  })
+
+  // Knockout fixtures/results also need canonical references for later rounds,
+  // records and modal navigation.
+  ;(S.knockoutRounds || []).forEach(round => {
+    ;(round.matches || []).forEach(match => {
+      match.t1 = canonical(match.t1)
+      match.t2 = canonical(match.t2)
+      if (match.result) {
+        match.result.t1 = match.t1
+        match.result.t2 = match.t2
+        if (match.result.winner) match.result.winner = canonical(match.result.winner)
+      }
+    })
+  })
+  if (S.champion) S.champion = canonical(S.champion)
+  return S
+}
+
 function buildSave() {
   return {
     ...JSON.parse(JSON.stringify(S)),
@@ -126,6 +190,7 @@ export async function loadGame() {
     const d = await dbGet(AUTO_KEY)
     if (!d) return false
     Object.assign(S, d)
+    normalizeTournamentState()
     return true
   } catch (e) { return false }
 }
@@ -141,6 +206,7 @@ export async function loadSlot(slotNum) {
   const d = await dbGet('slot_' + slotNum)
   if (!d) throw new Error('Slot empty')
   Object.assign(S, d)
+  normalizeTournamentState()
   restoreNationData(d)
   _activeSlot = slotNum
 }
@@ -178,6 +244,7 @@ export function importSave(file) {
         const d = JSON.parse(e.target.result)
         if (!d.wcNumber) throw new Error('Invalid save')
         Object.assign(S, d)
+        normalizeTournamentState()
         autoSave().then(res).catch(rej)
       } catch (err) { rej(err) }
     }

@@ -102,9 +102,14 @@ function playNextGroup() {
   })
 }
 
+function getCurrentKORound() {
+  return (S.knockoutRounds || []).find(r => (r.matches || []).some(m => !m.played)) || null
+}
+
 function playNextKO() {
-  // Find the earliest round that still has unplayed matches
-  const round = S.knockoutRounds.find(r => r.matches.some(m => !m.played))
+  // Find the earliest round that still has unplayed matches. This matters after
+  // the semi-finals because Third Place is queued before the Final.
+  const round = getCurrentKORound()
   if (!round) {
     advanceKnockout(); autoSave()
     if (S.phase === 'done') { updatePhaseUI(); renderBracket(); renderPlay(); toast(`🏆 ${S.champion?.name} are World Champions!`) }
@@ -237,11 +242,17 @@ window.skipPreviewedMatch = function() {
     const result = playGroupMatch(match)
     showGroupResultsPopup([result], 'Group Stage', () => { renderGroups(); updatePhaseUI() })
   } else if (S.phase === 'knockout') {
-    const round = S.knockoutRounds[S.knockoutRounds.length-1]
+    const round = getCurrentKORound()
     const match = round?.matches.find(m => !m.played)
     if (!match) return
     const result = playKnockoutMatch(match)
-    showGroupResultsPopup([result], round.name, () => { renderBracket(); updatePhaseUI() })
+    const roundComplete = round.matches.every(m => m.played)
+    if (roundComplete) advanceKnockout()
+    autoSave()
+    showGroupResultsPopup([result], round.name, () => {
+      renderBracket(); updatePhaseUI()
+      if (S.phase === 'done') renderPlay()
+    })
   }
 }
 
@@ -274,12 +285,15 @@ window.skipGroup = function(gi) {
 }
 
 window.skipKORound = function() {
-  const round = S.knockoutRounds[S.knockoutRounds.length-1]
+  const round = getCurrentKORound()
   if (!round) return
   const results = round.matches.filter(m=>!m.played).map(m => playKnockoutMatch(m))
-  advanceKnockout(); autoSave()
+  if (round.matches.every(m => m.played)) advanceKnockout()
+  autoSave()
   updatePhaseUI(); renderBracket()
-  showGroupResultsPopup(results, `${round.name} Results`, () => {})
+  showGroupResultsPopup(results, `${round.name} Results`, () => {
+    if (S.phase === 'done') renderPlay()
+  })
 }
 
 // ── Multi-match results popup (tabbed) ───────────────────────
@@ -803,7 +817,7 @@ function renderPlay() {
       ${renderStorylineFeed(5)}
       ${renderRecentResults()}`
   } else if (p === 'knockout') {
-    const round = S.knockoutRounds[S.knockoutRounds.length-1]
+    const round = getCurrentKORound()
     html = `<div class="sec">${round?.name?.toUpperCase()||'KNOCKOUT'}</div>
       <div class="row" style="gap:6px;margin-bottom:10px">
         <button class="btn btn-sm" onclick="skipKORound()">⏭ Skip This Round</button>
@@ -903,7 +917,8 @@ function renderGroups() {
 // ── BRACKET tab ───────────────────────────────────────────────
 function renderBracket() {
   const el = $('tab-bracket'); if(!el||!S.knockoutRounds?.length){if(el)el.innerHTML='<div class="empty">Knockout not started</div>';return}
-  const roundOrder = ['Round of 16','Quarter-finals','Semi-finals','Final']
+  const initialRound = S.knockoutRounds?.[0]?.name || 'Round of 16'
+  const roundOrder = [initialRound, 'Round of 16','Quarter-finals','Semi-finals','Third Place','Final'].filter((n,i,a)=>a.indexOf(n)===i)
   const roundMap = {}
   S.knockoutRounds.forEach(r => { roundMap[r.name]=r })
   let html='<div class="bracket-scroll"><div class="bracket-rounds">'
@@ -922,7 +937,7 @@ function renderBracket() {
         </div>`
       })
     } else {
-      const slots = { 'Round of 16':8, 'Quarter-finals':4, 'Semi-finals':2, 'Final':1 }[name] || 1
+      const slots = { 'Round of 32':16, 'Round of 16':8, 'Quarter-finals':4, 'Semi-finals':2, 'Third Place':1, 'Final':1 }[name] || 1
       for(let i=0;i<slots;i++) html+=`<div class="bracket-match"><div class="bracket-team tbd"><span class="bt-name">TBD</span></div><div class="bracket-team tbd"><span class="bt-name">TBD</span></div></div>`
     }
     html+='</div>'

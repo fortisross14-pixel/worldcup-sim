@@ -39,7 +39,7 @@ export function rollStarTier(tier) {
 }
 
 // ── All 71 nations ────────────────────────────────────────────
-export const ALL_NATIONS = [
+const RAW_NATIONS = [
   // ── UEFA (13 slots) ──────────────────────────────────────────
   // Top tier
   { name:'Germany',    cc:'de',     conf:'UEFA', tier:'top',  base:95, hist:200, always:true },
@@ -133,6 +133,13 @@ export const ALL_NATIONS = [
   { name:'Tahiti',      cc:'pf', conf:'OFC', tier:'rest', base:53, hist:1 },
   { name:'Solomon Islands', cc:'sb', conf:'OFC', tier:'rest', base:52, hist:1 },
 ]
+
+// Nation names are the stable identity used throughout saves, fixtures and records.
+// Keep one canonical entry per nation even if the source list is accidentally
+// extended with a duplicate in a later confederation block.
+export const ALL_NATIONS = Array.from(
+  new Map(RAW_NATIONS.map(n => [n.name, n])).values()
+)
 
 // Confederation qualification slots (32-team WC format)
 // 12 UEFA + 5 CONMEBOL + 6 CAF + 5 AFC + 3 CONCACAF + 1 OFC = 32 (host takes a slot from its own conf)

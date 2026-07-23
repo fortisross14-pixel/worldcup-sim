@@ -1,4 +1,4 @@
-import { S, autoSave } from '../store.js'
+import { S, autoSave, normalizeTournamentState } from '../store.js'
 import { ALL_NATIONS, CONF_SLOTS, flag, getSoul } from '../data/nations.js'
 import { simMatch, rand, clamp, shuffle, ovr, getEffStats, STAR_MULT, STAR_BONUSES } from './match.js'
 import { initAllStars, ageAllStars, linkStarsToTeam, syncStarsBack, TIER_ORDER } from './stars.js'
@@ -55,21 +55,26 @@ function rollStats(tier) {
 }
 
 // ── Qualification ─────────────────────────────────────────────
+function uniqueNations(list) {
+  return Array.from(new Map((list || []).map(n => [n.name, n])).values())
+}
+
 export function runQualification() {
   S.currentYear = wcYear(S.wcNumber)
   S.tournamentFormat = formatForYear(S.currentYear)
   ensureEra(S)
   const targetTeams = S.tournamentFormat.teams
   // Re-roll stats for each nation each WC (form varies)
-  ALL_NATIONS.forEach(n => { n.stats = rollStats(n.tier || 'rest') })
+  const nationPool = uniqueNations(ALL_NATIONS)
+  nationPool.forEach(n => { n.stats = rollStats(n.tier || 'rest') })
 
   // Host already chosen by startNewWC (or pick now for first WC)
   if (!S.hostNation) {
-    S.hostNation = ALL_NATIONS[Math.floor(Math.random() * ALL_NATIONS.length)].name
+    S.hostNation = nationPool[Math.floor(Math.random() * nationPool.length)].name
   }
 
   // Always-qualified nations
-  const always = ALL_NATIONS.filter(n => n.always || n.name === S.hostNation)
+  const always = nationPool.filter(n => n.always || n.name === S.hostNation)
   const alwaysSet = new Set(always.map(n => n.name))
 
   // Fill confederation slots
@@ -78,7 +83,7 @@ export function runQualification() {
 
   Object.entries(CONF_SLOTS).forEach(([conf, slots]) => {
     if (conf === 'HOST' || conf === 'PLAYOFF') return
-    const pool = ALL_NATIONS.filter(n => n.conf === conf && !qualSet.has(n.name))
+    const pool = nationPool.filter(n => n.conf === conf && !qualSet.has(n.name))
     const needed = Math.max(0, slots - qualified.filter(n => n.conf === conf).length)
     // Weight by season rating
     const scored = pool.map(n => ({ n, score: seasonRating(n) + gauss(2, 5) }))
@@ -88,19 +93,19 @@ export function runQualification() {
 
   // Fill to 32
   while (qualified.length < 32) {
-    const pool = ALL_NATIONS.filter(n => !qualSet.has(n.name))
+    const pool = nationPool.filter(n => !qualSet.has(n.name))
     if (!pool.length) break
     const n = pool[Math.floor(Math.random() * pool.length)]
     qualified.push(n); qualSet.add(n.name)
   }
 
   // Host's confederation (for the +4 bonus)
-  const hostNation = ALL_NATIONS.find(n => n.name === S.hostNation)
+  const hostNation = nationPool.find(n => n.name === S.hostNation)
   const hostConf = hostNation?.conf
 
   // Fill or trim globally to the format target after confederation selection.
   if (qualified.length < targetTeams) {
-    const extras = ALL_NATIONS.filter(n=>!qualSet.has(n.name)).map(n=>({n,score:seasonRating(n)+gauss(2,5)})).sort((a,b)=>b.score-a.score)
+    const extras = nationPool.filter(n=>!qualSet.has(n.name)).map(n=>({n,score:seasonRating(n)+gauss(2,5)})).sort((a,b)=>b.score-a.score)
     extras.slice(0,targetTeams-qualified.length).forEach(x=>qualified.push(x.n))
   }
   // Build team objects with host & confederation stat bonuses
@@ -185,6 +190,9 @@ export function updateGroupStats(result) {
 }
 
 export function playGroupMatch(match) {
+  // Saves are JSON snapshots, so shared team references can be duplicated after
+  // reload. Normalize and rebuild the table before applying the next result.
+  normalizeTournamentState()
   if (match.played) return null
   const result = simMatch(match.t1, match.t2, true, false, 'Group Stage')
   match.played = true; match.result = result
